@@ -8,6 +8,7 @@ const TOTP = require('./totp');
 const Pay = require('./payments');
 const { createOutbox } = require('./integrations/outbox');
 const { createSuppliers } = require('./suppliers');
+const CONTENT = require('./content');
 
 const HOLD_MIN = 15;
 const TRANSITIONS = {
@@ -86,6 +87,10 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
       tx(() => { releaseInventory(b); setStatus(b, 'failed', 'Hold expired'); });
     }
   }
+  const getContact = () => {
+    const row = get("SELECT value FROM settings WHERE key='contact'");
+    return { ...CONTENT.DEFAULT_CONTACT, ...(row ? J(row.value, {}) : {}) };
+  };
   const rulesNow = () => all('SELECT * FROM pricing_rules WHERE active=1');
 
   // ---------- serializers ----------
@@ -247,7 +252,7 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
   app.get('/api/me', need(), (req, res) => res.json(userOut(req.user)));
   app.get('/api/notifications', need(), (req, res) => res.json(all('SELECT id,text,at FROM notifications WHERE user_id=? ORDER BY id DESC LIMIT 30', req.user.id)));
   app.get('/api/meta', (req, res) => res.json({
-    currencies: P.CURRENCIES, rates: P.RATES,
+    currencies: P.CURRENCIES, rates: P.RATES, contact: getContact(),
     cities: all("SELECT city,country,COUNT(*) n FROM hotels WHERE status='approved' GROUP BY city,country ORDER BY n DESC"),
     hotelsForClaim: all("SELECT id,name,city FROM hotels WHERE status='approved' ORDER BY name"),
   }));
@@ -645,6 +650,19 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
     audit(req.user.id, 'rates.update', r);
     res.json({ rates: P.RATES });
   }));
+  app.put('/api/admin/settings/contact', admin, wrap((req, res) => {
+    const b = req.body || {};
+    const out = {};
+    for (const k of Object.keys(CONTENT.DEFAULT_CONTACT)) {
+      const v = String(b[k] ?? '').trim().slice(0, 200);
+      if (k === 'phone' || k === 'email') out[k] = v;
+      else if (v && !/^https:\/\//i.test(v)) throw fail(400, k + ' must be an https:// link');
+      else out[k] = v || CONTENT.DEFAULT_CONTACT[k];
+    }
+    run("INSERT INTO settings(key,value) VALUES('contact',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", JSON.stringify(out));
+    audit(req.user.id, 'settings.contact', out);
+    res.json(out);
+  }));
   app.get('/api/pages/:slug', (req, res) => {
     const p = get('SELECT title,body FROM cms_pages WHERE slug=? AND lang=?', req.params.slug, req.query.lang || 'en') || get("SELECT title,body FROM cms_pages WHERE slug=? AND lang='en'", req.params.slug);
     if (!p) return res.status(404).json({ error: 'Not found' });
@@ -695,8 +713,12 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
     setInterval(() => suppliers.syncAll().catch((e) => console.error('sync', e.message)), (+process.env.SUPPLIER_SYNC_MIN || 30) * 60000),
   ];
   timers.forEach((t) => t.unref());
-  if (!get('SELECT 1 FROM cms_pages LIMIT 1')) {
-    for (const [slug, title, body] of [['about', 'About Stayly', 'Stayly connects travellers and travel agencies with hotels in Azerbaijan and Uzbekistan.'], ['terms', 'Terms of use', 'Edit this page in Admin > Content.'], ['privacy', 'Privacy policy', 'Edit this page in Admin > Content.']]) run('INSERT INTO cms_pages(slug,lang,title,body) VALUES(?,?,?,?)', slug, 'en', title, body);
+  for (const [slug, langs] of Object.entries(CONTENT.PAGES)) {
+    for (const [lang, [title, body]] of Object.entries(langs)) {
+      const cur = get('SELECT body FROM cms_pages WHERE slug=? AND lang=?', slug, lang);
+      if (!cur) run('INSERT INTO cms_pages(slug,lang,title,body) VALUES(?,?,?,?)', slug, lang, title, body);
+      else if (CONTENT.OLD_PLACEHOLDERS.some((p) => cur.body.startsWith(p))) run('UPDATE cms_pages SET title=?, body=? WHERE slug=? AND lang=?', title, body, slug, lang); // only replaces untouched placeholders
+    }
   }
   suppliers.syncAll().catch((e) => console.error('sync', e.message));
   return { app, db, outbox, suppliers, close: () => { timers.forEach(clearInterval); db.close(); } };

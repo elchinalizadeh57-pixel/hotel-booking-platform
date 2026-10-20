@@ -10,7 +10,7 @@ Requires **Node.js ≥ 22.5** (uses the built-in `node:sqlite`).
 ```bash
 npm install
 npm start          # http://localhost:3000
-npm test           # 32 tests: pricing, roles, double-booking, payments, idempotency, integrations
+npm test           # 33 tests: pricing, roles, double-booking, payments, idempotency, integrations
 ```
 
 The SQLite database (`data/hotel.db`) is created and seeded with demo data on first start. Env: `PORT`, `DB_PATH`, `AUTH_SECRET`.

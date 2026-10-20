@@ -165,9 +165,10 @@ test('SEO: hotel page with JSON-LD, sitemap, robots; CMS page editable by admin'
   assert.match((await api('/sitemap.xml')).data, /<loc>[^<]*\/h\/1<\/loc>/);
   assert.match((await api('/robots.txt')).data, /Sitemap:/);
   const adm = await login('admin@hotel.local', 'Admin123!');
-  await api('/api/admin/pages/about/az', { method: 'PUT', token: adm, body: { title: 'Haqqımızda', body: 'Mətn' } });
-  assert.equal((await api('/api/pages/about?lang=az')).data.title, 'Haqqımızda');
-  assert.equal((await api('/api/pages/about?lang=ru')).data.title, 'About Stayly');
+  await api('/api/admin/pages/faq/en', { method: 'PUT', token: adm, body: { title: 'FAQ', body: 'Text' } });
+  await api('/api/admin/pages/faq/az', { method: 'PUT', token: adm, body: { title: 'Tez-tez verilən suallar', body: 'Mətn' } });
+  assert.equal((await api('/api/pages/faq?lang=az')).data.title, 'Tez-tez verilən suallar');
+  assert.equal((await api('/api/pages/faq?lang=ru')).data.title, 'FAQ'); // falls back to English
 });
 
 test('REQUIRE_ADMIN_MFA blocks admin without MFA', async () => {
@@ -176,4 +177,23 @@ test('REQUIRE_ADMIN_MFA blocks admin without MFA', async () => {
   const r = await api('/api/admin/stats', { token: adm });
   assert.equal(r.status, 403);
   delete process.env.REQUIRE_ADMIN_MFA;
+});
+
+test('default legal/marketing pages exist in all four languages; contact buttons are admin-editable (https only)', async () => {
+  for (const slug of ['about', 'terms', 'privacy']) {
+    for (const lang of ['en', 'ru', 'az', 'uz']) {
+      const p = (await api(`/api/pages/${slug}?lang=${lang}`)).data;
+      assert.ok(p.body.length > 400, `${slug}/${lang}`);
+      assert.ok(!p.body.startsWith('Edit this page'));
+    }
+  }
+  const meta = (await api('/api/meta')).data;
+  assert.ok(meta.contact.phone && meta.contact.telegram && meta.contact.whatsapp && meta.contact.facebook && meta.contact.instagram);
+  const adm = await login('admin@hotel.local', 'Admin123!');
+  const bad = await api('/api/admin/settings/contact', { method: 'PUT', token: adm, body: { telegram: 'javascript:alert(1)' } });
+  assert.equal(bad.status, 400);
+  const ok = await api('/api/admin/settings/contact', { method: 'PUT', token: adm, body: { phone: '+994 50 123 45 67', telegram: 'https://t.me/stayly_help' } });
+  assert.equal(ok.status, 200);
+  assert.equal((await api('/api/meta')).data.contact.telegram, 'https://t.me/stayly_help');
+  assert.equal((await api('/api/admin/settings/contact', { method: 'PUT', body: {} })).status, 401);
 });

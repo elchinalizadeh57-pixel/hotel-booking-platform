@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS suppliers(id INTEGER PRIMARY KEY, code TEXT UNIQUE, n
   last_sync TEXT, last_status TEXT, last_error TEXT);
 CREATE TABLE IF NOT EXISTS supplier_mappings(supplier_id INTEGER, external_id TEXT, kind TEXT, local_id INTEGER, PRIMARY KEY(supplier_id, kind, external_id));
 CREATE TABLE IF NOT EXISTS currency_rates(id INTEGER PRIMARY KEY, currency TEXT, per_usd REAL, source TEXT, at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS cms_pages(slug TEXT, lang TEXT, title TEXT, body TEXT, PRIMARY KEY(slug, lang));
 CREATE TABLE IF NOT EXISTS analytics_events(
   id INTEGER PRIMARY KEY, type TEXT, ref TEXT, at TEXT DEFAULT CURRENT_TIMESTAMP);

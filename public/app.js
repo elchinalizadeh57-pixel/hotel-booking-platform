@@ -38,7 +38,36 @@ function renderTop() {
   $('#cur').onchange = (e) => { S.cur = e.target.value; localStorage.setItem('cur', S.cur); route(); };
   $('#lang').onchange = (e) => { S.lang = e.target.value; localStorage.setItem('lang', S.lang); document.documentElement.lang = S.lang; renderTop(); route(); };
   if ($('#out')) $('#out').onclick = () => logout();
-  $('#foot').innerHTML = `<div>${['about', 'terms', 'privacy'].map((p) => `<a href="#/page/${p}" style="color:#b9c6e0;margin:0 10px">${t('p_' + p)}</a>`).join('')}</div><div style="margin-top:8px">${esc(t('footer'))}</div>`;
+  $('#foot').innerHTML = `<div class="foot-links">${['about', 'contact', 'terms', 'privacy'].map((p) => `<a href="#/${p === 'contact' ? 'contact' : 'page/' + p}">${t('p_' + p)}</a>`).join('')}</div>${contactButtons(true)}<div style="margin-top:10px">${esc(t('footer'))}</div>`;
+}
+
+/* ---------- contact buttons ---------- */
+const CONTACT_DEF = { phone: '+994 12 000 00 00', telegram: 'https://t.me/', whatsapp: 'https://wa.me/', facebook: 'https://www.facebook.com/', instagram: 'https://www.instagram.com/' };
+function contactButtons(small) {
+  const c = { ...CONTACT_DEF, ...((S.meta && S.meta.contact) || {}) };
+  const tel = 'tel:' + String(c.phone).replace(/[^+\d]/g, '');
+  const items = [
+    ['phone', tel, '📞', c.phone, '#0b7a4b'], ['telegram', c.telegram, '✈️', 'Telegram', '#229ed9'], ['whatsapp', c.whatsapp, '💬', 'WhatsApp', '#25d366'],
+    ['facebook', c.facebook, 'f', 'Facebook', '#1877f2'], ['instagram', c.instagram, '◎', 'Instagram', '#d6249f'],
+  ];
+  return `<div class="cbtns ${small ? 'small' : ''}">${items.map(([k, href, ic, label, col]) => `<a class="cbtn" style="--c:${col}" href="${esc(href)}" ${k === 'phone' ? '' : 'target="_blank" rel="noopener noreferrer"'} aria-label="${k}"><b>${ic}</b>${small ? '' : `<span>${esc(label)}</span>`}</a>`).join('')}</div>`;
+}
+
+/* minimal, safe markdown for CMS pages: ## headings, - lists, **bold**, *italic*, 1. lists */
+function md(src) {
+  const inline = (x) => esc(x).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\*(.+?)\*/g, '<i>$1</i>');
+  let out = '', list = null;
+  const close = () => { if (list) { out += `</${list}>`; list = null; } };
+  for (const line of String(src).split('\n')) {
+    let m;
+    if ((m = line.match(/^## (.*)/))) { close(); out += `<h2>${inline(m[1])}</h2>`; }
+    else if ((m = line.match(/^- (.*)/))) { if (list !== 'ul') { close(); out += '<ul>'; list = 'ul'; } out += `<li>${inline(m[1])}</li>`; }
+    else if ((m = line.match(/^\d+\. (.*)/))) { if (list !== 'ol') { close(); out += '<ol>'; list = 'ol'; } out += `<li>${inline(m[1])}</li>`; }
+    else if (!line.trim()) close();
+    else { close(); out += `<p>${inline(line)}</p>`; }
+  }
+  close();
+  return out;
 }
 
 /* ---------- router ---------- */
@@ -347,8 +376,11 @@ R(/^\/admin$/, async (app, m, q) => {
     $('#rt').onsubmit = async (e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); try { await api('/admin/rates', { method: 'PUT', body: { EUR: +f.EUR, RUB: +f.RUB, AZN: +f.AZN, UZS: +f.UZS } }); S.meta = await api('/meta'); toast(t('saved')); route(); } catch (er) { toast(er.message); } };
   } else if (tab === 'content') {
     const ps = await api('/admin/pages');
-    shell(`<div class="card pad"><h3>CMS pages</h3><form id="cp"><div class="row"><div class="field"><label>Slug</label><input name="slug" value="about" pattern="[a-z0-9-]+" required></div><div class="field"><label>Lang</label><select name="lang"><option>en</option><option>az</option><option>ru</option><option>uz</option></select></div><div class="field"><label>Title</label><input name="title" required></div></div><div class="field"><label>Body</label><textarea name="body" rows="6"></textarea></div><button class="btn">${t('save')}</button></form></div>
+    const ct = { ...CONTACT_DEF, ...(S.meta.contact || {}) };
+    shell(`<div class="card pad" style="margin-bottom:16px"><h3>${t('contactTitle')}</h3><form id="ctf" class="row">${['phone', 'email', 'telegram', 'whatsapp', 'facebook', 'instagram'].map((k) => `<div class="field"><label>${k}</label><input name="${k}" value="${esc(ct[k] || '')}"></div>`).join('')}<div class="field"><label>&nbsp;</label><button class="btn">${t('save')}</button></div></form><p class="muted small">Social links must start with https://</p></div>
+    <div class="card pad"><h3>CMS pages</h3><form id="cp"><div class="row"><div class="field"><label>Slug</label><input name="slug" value="about" pattern="[a-z0-9-]+" required></div><div class="field"><label>Lang</label><select name="lang"><option>en</option><option>az</option><option>ru</option><option>uz</option></select></div><div class="field"><label>Title</label><input name="title" required></div></div><div class="field"><label>Body</label><textarea name="body" rows="6"></textarea></div><button class="btn">${t('save')}</button></form></div>
     <table style="margin-top:16px"><tr><th>Slug</th><th>Lang</th><th>Title</th></tr>${ps.map((p) => `<tr><td>${esc(p.slug)}</td><td>${esc(p.lang)}</td><td>${esc(p.title)}</td></tr>`).join('')}</table>`);
+    $('#ctf').onsubmit = async (e) => { e.preventDefault(); try { S.meta.contact = await api('/admin/settings/contact', { method: 'PUT', body: Object.fromEntries(new FormData(e.target)) }); renderTop(); toast(t('saved')); } catch (er) { toast(er.message); } };
     $('#cp').onsubmit = async (e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); try { await api(`/admin/pages/${f.slug}/${f.lang}`, { method: 'PUT', body: { title: f.title, body: f.body } }); toast(t('saved')); route(); } catch (er) { toast(er.message); } };
   } else if (tab === 'users') {
     const us = await api('/admin/users');
@@ -361,7 +393,14 @@ R(/^\/admin$/, async (app, m, q) => {
 
 R(/^\/page\/([a-z0-9-]+)$/, async (app, m) => {
   const p = await api(`/pages/${m[1]}?lang=${S.lang}`);
-  app.innerHTML = `<div class="wrap sec"><div class="card pad"><h1>${esc(p.title)}</h1><div style="white-space:pre-wrap">${esc(p.body)}</div></div></div>`;
+  app.innerHTML = `<div class="wrap sec"><div class="card pad"><h1>${esc(p.title)}</h1><div class="prose">${md(p.body)}</div>${m[1] === 'about' ? `<p style="margin-top:24px"><a class="btn gold" href="#/search">${t('search')}</a> <a class="btn ghost" href="#/register?type=agency">${t('registerAgency')}</a></p>` : ''}</div></div>`;
+});
+
+R(/^\/contact$/, async (app) => {
+  const c = { ...CONTACT_DEF, ...((S.meta && S.meta.contact) || {}) };
+  app.innerHTML = `<div class="wrap sec"><div class="card pad" style="max-width:760px;margin:0 auto"><h1>${t('contactTitle')}</h1><p class="muted">${t('contactIntro')}</p>${contactButtons(false)}
+  <p style="margin-top:22px"><b>${t('phone')}:</b> <a href="tel:${esc(String(c.phone).replace(/[^+\d]/g, ''))}">${esc(c.phone)}</a>${c.email ? `<br><b>${t('email')}:</b> <a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : ''}</p>
+  <p class="muted small">${t('contactHours')}</p></div></div>`;
 });
 
 R(/^\/security$/, async (app) => {
