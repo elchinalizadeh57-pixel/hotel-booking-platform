@@ -162,7 +162,7 @@ R(/^\/search$/, async (app, m, q) => {
   }));
 });
 function hotelCard(h, nights, q) {
-  return `<article class="card hcard"><div class="img" ${bg(h.image)}></div><div class="body">${stars(h.stars)}<h3><a href="#/hotel/${h.id}?${stayQs(q)}">${esc(h.name)}</a></h3>
+  return `<article class="card hcard"><div class="img" ${bg(h.image)}>${h.logo ? `<img class="clogo" src="${esc(h.logo)}" alt="">` : ''}</div><div class="body">${stars(h.stars)}<h3><a href="#/hotel/${h.id}?${stayQs(q)}">${esc(h.name)}</a></h3>
    <div class="muted small">📍 ${esc(h.city)}, ${esc(h.country)}</div><p class="small muted" style="margin:8px 0">${esc(h.description)}</p>
    <div>${h.amenities.slice(0, 5).map((a) => `<span class="tag">${AMEN[a] || ''} ${t(a)}</span>`).join('')}<span class="tag gold">${t('m' + h.meal)}</span></div>
    ${h.roomsLeft <= 3 ? `<div class="small" style="color:var(--bad);font-weight:700;margin-top:6px">${t('onlyLeft', { n: h.roomsLeft })}</div>` : ''}</div>
@@ -175,8 +175,9 @@ R(/^\/hotel\/(\d+)$/, async (app, m, q) => {
   q.checkIn ||= plus(14); q.checkOut ||= plus(16);
   const h = await api(`/hotels/${m[1]}?${new URLSearchParams({ ...q, currency: S.cur })}`);
   const im = h.images.length ? h.images : [''];
-  app.innerHTML = `<section class="hero2 short" style="background-image:url('${esc(im[0])}'),linear-gradient(160deg,#0b3550,#07202f 70%)"><div class="ghost-word sm" aria-hidden="true">${esc(h.name.split(' ')[0])}</div><div class="wrap in"><div class="htitle"><div>${stars(h.stars)}</div><h1>${esc(h.name)}</h1><div class="loc"><span>📍 ${esc(h.address)}, ${esc(h.city)}, ${esc(h.country)}</span><span class="score">${h.rating.toFixed(1)}</span></div></div>${searchBox(q, 'hero')}</div></section>
+  app.innerHTML = `<section class="hero2 short" style="background-image:url('${esc(im[0])}'),linear-gradient(160deg,#0b3550,#07202f 70%)"><div class="ghost-word sm" aria-hidden="true">${esc(h.name.split(' ')[0])}</div><div class="wrap in"><div class="htitle">${h.logo ? `<img class="hlogo" src="${esc(h.logo)}" alt="${esc(h.name)}">` : ''}<div>${stars(h.stars)}</div><h1>${esc(h.name)}</h1><div class="loc"><span>📍 ${esc(h.address)}, ${esc(h.city)}, ${esc(h.country)}</span><span class="score">${h.rating.toFixed(1)}</span></div></div>${searchBox(q, 'hero')}</div></section>
    <div class="wrap sec"><div class="gallery"><div ${bg(im[0])}></div><div class="col"><div ${bg(im[1] || im[0])}></div><div ${bg(im[2] || im[0])}></div></div></div>
+   ${(h.about || h.services.length) ? `<div class="card pad" style="margin-top:22px"><div class="grid g2">${h.about ? `<div><h3>${t('aboutUs')}</h3><p style="white-space:pre-wrap">${esc(h.about)}</p></div>` : ''}${h.services.length ? `<div><h3>${t('ourServices')}</h3><ul class="svc">${h.services.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}</div></div>` : ''}
    <div class="grid split" style="margin-top:22px"><div class="card pad"><h3>${t('about')}</h3><p>${esc(h.description)}</p><div>${h.amenities.map((a) => `<span class="tag">${AMEN[a] || ''} ${t(a)}</span>`).join('')}<span class="tag gold">${t('m' + h.meal)}</span></div></div>
     <div class="card pad small"><p><b>${t('checkInFrom')}:</b> ${esc(h.checkin)}<br><b>${t('checkOutUntil')}:</b> ${esc(h.checkout)}</p><p><b>${t('cancelPolicy')}:</b><br>${esc(h.cancelPolicy)}</p>${h.website ? `<a href="${esc(h.website)}" target="_blank" rel="noopener noreferrer">🌐 Website</a>` : ''} ${h.instagram ? `· <a href="${esc(h.instagram)}" target="_blank" rel="noopener noreferrer">Instagram</a>` : ''}</div></div>
    <h2 style="margin-top:28px">${t('roomsRates')}</h2>
@@ -200,7 +201,7 @@ R(/^\/checkout\/(\d+)$/, async (app, m, q) => {
    ${hotel.payOptions.map((o, i) => `<label class="chk" style="display:flex;gap:8px;margin-bottom:8px;align-items:flex-start"><input type="radio" name="pay" value="${o}" ${i === 0 ? 'checked' : ''}> <span>${o === 'online' ? t('payOnline') : `${t('payProperty')}<br><span class="muted small">${t('payPropertyHint')}</span>`}</span></label>`).join('')}
    ${agencyOk ? `<label class="chk" style="display:flex;gap:8px"><input type="radio" name="pay" value="contract"> ${t('payContract')} <span class="muted small">(${t('available')}: ${money((S.user.agency.creditLimit - S.user.agency.debt) * (rateOf(S.cur)), S.cur)})</span></label>` : ''}
    <div id="err"></div><button class="btn gold" style="margin-top:18px;width:100%;padding:14px" id="go">${t('confirmBooking')}</button></form>
-   <aside class="card pad"><div ${bg(hotel.images[0])} style="height:120px;border-radius:12px;background-size:cover;background-image:url('${esc(hotel.images[0])}'),${FALLBACK}"></div><h3 style="margin-top:12px">${esc(hotel.name)}</h3><div class="muted small">${esc(offer.name)}</div><hr style="border:0;border-top:1px solid var(--line)">
+   <aside class="card pad"><div ${bg(hotel.images[0])} style="height:120px;border-radius:12px;background-size:cover;background-image:url('${esc(hotel.images[0])}'),${FALLBACK}"></div><h3 style="margin-top:12px;display:flex;align-items:center;gap:10px">${hotel.logo ? `<img src="${esc(hotel.logo)}" alt="" style="width:36px;height:36px;border-radius:10px;object-fit:cover">` : ''}${esc(hotel.name)}</h3><div class="muted small">${esc(offer.name)}</div><hr style="border:0;border-top:1px solid var(--line)">
    <p class="small">${esc(q.checkIn)} → ${esc(q.checkOut)}<br>${hotel.nights} ${t('nights')} · ${q.rooms || 1} ${t('rooms')} · ${q.adults || 2} ${t('adults')}</p>${offer.priceType === 'agency' ? `<span class="tag green">${t('agencyRate')}</span>` : ''}<div class="price">${money(offer.total, offer.currency)}</div><div class="muted small">${t('priceFinal')}</div></aside></div></div>`;
   const key = crypto.randomUUID();
   $('#bf').onsubmit = async (e) => {
@@ -300,26 +301,87 @@ R(/^\/agency$/, async (app) => {
 const bookTable = (bs) => bs.length ? `<table><tr><th>${t('bookingRef')}</th><th>Hotel</th><th>${t('fullName')}</th><th>${t('checkIn')}</th><th>${t('checkOut')}</th><th>${t('total')}</th><th>${t('status')}</th></tr>${bs.map((b) => `<tr><td><a href="#/booking/${b.id}">${esc(b.ref)}</a></td><td>${esc(b.hotel)}</td><td>${esc(b.guest.name)}</td><td>${esc(b.checkIn)}</td><td>${esc(b.checkOut)}</td><td>${money(b.total, b.currency)}</td><td>${statusTag(b.status)}</td></tr>`).join('')}</table>` : `<div class="card pad">${t('noTrips')}</div>`;
 
 /* ---------- hotel cabinet ---------- */
-R(/^\/cabinet$/, async (app) => {
+const readDataUrl = (file) => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => no(new Error('Cannot read file')); r.readAsDataURL(file); });
+async function uploadImage(file) {
+  if (!file) return null;
+  if (file.size > 500 * 1024) throw new Error(t('imgTooBig'));
+  return (await api('/hotel/upload', { method: 'POST', body: { dataUrl: await readDataUrl(file) } })).url;
+}
+const HOTEL_AMEN_KEYS = ['wifi', 'pool', 'spa', 'parking', 'restaurant', 'gym', 'ac'];
+const ROOM_AMEN_KEYS = ['wifi', 'tv', 'ac', 'minibar', 'balcony', 'bathtub', 'kettle', 'safe'];
+R(/^\/cabinet$/, async (app, m, q) => {
   if (S.user?.role !== 'hotel') { location.hash = '#/login'; return; }
   const st = await api('/hotel/status');
-  if (!st.linked) { app.innerHTML = `<div class="wrap sec"><div class="notice">${t('pendingHotel')} (${esc(st.claim?.status || '')})</div></div>`; return; }
+  if (!st.linked) { app.innerHTML = '<div class="wrap sec"><div class="notice">' + t('pendingHotel') + ' (' + esc(st.claim?.status || '') + ')</div></div>'; return; }
   const d = await api('/hotel/me');
-  app.innerHTML = `<div class="wrap sec"><h1>${esc(d.hotel.name)} <small class="muted">${esc(d.hotel.city)}</small></h1>
-  <div class="card pad" style="margin-bottom:20px"><h2>${t('inventory')}</h2><form id="inv"><div class="row"><div class="field"><label>Room</label><select name="room">${d.rooms.map((r) => `<option value="${r.id}">${esc(r.name)}</option>`).join('')}</select></div>
-   <div class="field"><label>${t('from_')}</label><input type="date" name="from" min="${plus(0)}" value="${plus(1)}" required></div><div class="field"><label>${t('to_')}</label><input type="date" name="to" min="${plus(0)}" value="${plus(30)}"></div>
-   <div class="field"><label>${t('availableRooms')}</label><input type="number" name="available" min="0"></div><div class="field"><label>${t('priceUsd')}</label><input type="number" step="0.01" min="1" name="price"></div>
-   <div class="field"><label>${t('closed')}</label><select name="closed"><option value="">—</option><option value="1">✔</option><option value="0">✘</option></select></div></div><button class="btn">${t('save')}</button></form></div>
-  <div class="card pad" style="margin-bottom:20px"><h2>${t('payTerms')}</h2><form id="pp" class="row"><div class="field"><select name="paymentPolicy"><option value="both" ${d.hotel.paymentPolicy === 'both' ? 'selected' : ''}>${t('polBoth')}</option><option value="online" ${d.hotel.paymentPolicy === 'online' ? 'selected' : ''}>${t('polOnline')}</option><option value="property" ${d.hotel.paymentPolicy === 'property' ? 'selected' : ''}>${t('polProperty')}</option></select></div><div class="field"><button class="btn">${t('save')}</button></div></form></div>
-  <h2>${t('bookings')}</h2>${d.bookings.length ? `<table><tr><th>${t('bookingRef')}</th><th>${t('fullName')}</th><th>Room</th><th>${t('checkIn')}</th><th>${t('checkOut')}</th><th>USD</th><th>${t('status')}</th><th>${t('roomNumber')}</th></tr>${d.bookings.map((b) => `<tr><td>${esc(b.ref)}</td><td>${esc(b.guest.name)}</td><td>${esc(b.room)}</td><td>${esc(b.checkIn)}</td><td>${esc(b.checkOut)}</td><td>${b.hotelPayableUsd?.toFixed(2)}</td><td>${statusTag(b.status)}</td><td><input style="width:80px" value="${esc(b.roomNumber || '')}" data-rn="${b.id}"></td></tr>`).join('')}</table>` : `<div class="card pad">${t('noTrips')}</div>`}</div>`;
-  $('#pp').onsubmit = async (e) => { e.preventDefault(); try { await api('/hotel/me', { method: 'PATCH', body: { paymentPolicy: e.target.paymentPolicy.value } }); toast(t('saved')); } catch (er) { toast(er.message); } };
-  $('#inv').onsubmit = async (e) => {
-    e.preventDefault(); const f = Object.fromEntries(new FormData(e.target));
-    const body = { from: f.from, to: f.to || undefined };
-    if (f.available !== '') body.available = +f.available; if (f.price !== '') body.price = +f.price; if (f.closed !== '') body.closed = f.closed === '1';
-    try { await api(`/hotel/rooms/${f.room}/inventory`, { method: 'PUT', body }); toast(t('saved')); } catch (er) { toast(er.message); }
-  };
-  document.querySelectorAll('[data-rn]').forEach((i) => (i.onchange = () => api('/hotel/bookings/' + i.dataset.rn, { method: 'PATCH', body: { roomNumber: i.value } }).then(() => toast(t('saved')))));
+  const h = d.hotel, cur = h.currency, tab = q.tab || 'profile';
+  const tabs = [['profile', 'cabProfile'], ['rooms', 'cabRooms'], ['inventory', 'inventory'], ['bookings', 'bookings']];
+  const ck = (name, list, sel) => list.map((a) => '<label class="chk" style="display:inline-flex;gap:6px;margin:0 14px 6px 0"><input type="checkbox" name="' + name + '" value="' + a + '" ' + (sel.includes(a) ? 'checked' : '') + '> ' + (t(a) === a ? a : t(a)) + '</label>').join('');
+  const head = '<div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">' + (h.logo ? '<img class="hlogo" style="margin:0;border-color:var(--line)" src="' + esc(h.logo) + '" alt="">' : '<div class="ico">🏨</div>') + '<h1 style="margin:0">' + esc(h.name) + ' <small class="muted">' + esc(h.city) + '</small></h1></div><div class="tabs">' + tabs.map(([k, l]) => '<button class="' + (k === tab ? 'on' : '') + '" data-t="' + k + '">' + t(l) + '</button>').join('') + '</div>';
+  const shell = (inner) => { app.innerHTML = '<div class="wrap sec">' + head + inner + '</div>'; document.querySelectorAll('[data-t]').forEach((b) => (b.onclick = () => (location.hash = '#/cabinet?tab=' + b.dataset.t))); };
+  const fail = (er) => toast(er.message);
+
+  if (tab === 'profile') {
+    shell('<form id="pf" class="card pad">' +
+      '<div class="row" style="align-items:flex-end"><div class="field" style="flex:0 0 120px">' + (h.logo ? '<img src="' + esc(h.logo) + '" alt="" style="width:100px;height:100px;border-radius:18px;object-fit:cover;border:1px solid var(--line)">' : '<div class="ico" style="width:100px;height:100px;font-size:40px">🏨</div>') + '</div>' +
+      '<div class="field"><label>' + t('logo') + '</label><input type="file" id="logo" accept="image/png,image/jpeg,image/webp"><div class="muted small">' + t('logoHint') + '</div></div>' + (h.logo ? '<div class="field" style="flex:0 0 auto"><button type="button" class="btn sm danger" id="rmlogo">' + t('removeLogo') + '</button></div>' : '') + '</div>' +
+      '<div class="row"><div class="field"><label>' + t('hotelCurrency') + '</label><select name="currency">' + (S.meta.currencies || ['USD']).map((c) => '<option ' + (c === cur ? 'selected' : '') + '>' + c + '</option>').join('') + '</select></div>' +
+      '<div class="field" style="flex:2"><label class="chk" style="display:flex;gap:8px;margin-top:26px"><input type="checkbox" name="convertPrices" checked> ' + t('convertPrices') + '</label><div class="muted small">' + t('currencyHint') + '</div></div></div>' +
+      '<div class="field"><label>' + t('shortDesc') + '</label><textarea name="description" rows="2" maxlength="600">' + esc(h.description) + '</textarea></div>' +
+      '<div class="field"><label>' + t('aboutUs') + '</label><textarea name="about" rows="6" maxlength="5000" placeholder="' + esc(t('aboutPh')) + '">' + esc(h.about) + '</textarea></div>' +
+      '<div class="field"><label>' + t('servicesList') + '</label><textarea name="servicesText" rows="5" maxlength="3000" placeholder="' + esc(t('servicesPh')) + '">' + esc(h.servicesText) + '</textarea><div class="muted small">' + t('servicesHint') + '</div></div>' +
+      '<div class="field"><label>' + t('facilities') + '</label>' + ck('amenities', HOTEL_AMEN_KEYS, h.amenities) + '</div>' +
+      '<div class="row"><div class="field"><label>Website (https://)</label><input name="website" value="' + esc(h.website || '') + '"></div><div class="field"><label>Instagram (https://)</label><input name="instagram" value="' + esc(h.instagram || '') + '"></div></div>' +
+      '<div class="field"><label>' + t('cancelPolicy') + '</label><input name="cancelPolicy" maxlength="300" value="' + esc(h.cancelPolicy || '') + '"></div>' +
+      '<div class="field"><label>' + t('payTerms') + '</label><select name="paymentPolicy"><option value="both" ' + (h.paymentPolicy === 'both' ? 'selected' : '') + '>' + t('polBoth') + '</option><option value="online" ' + (h.paymentPolicy === 'online' ? 'selected' : '') + '>' + t('polOnline') + '</option><option value="property" ' + (h.paymentPolicy === 'property' ? 'selected' : '') + '>' + t('polProperty') + '</option></select></div>' +
+      '<button class="btn gold">' + t('save') + '</button></form>');
+    $('#logo').onchange = async (e) => { try { const url = await uploadImage(e.target.files[0]); if (url) { await api('/hotel/me', { method: 'PATCH', body: { logo: url } }); toast(t('saved')); route(); } } catch (er) { fail(er); } };
+    if ($('#rmlogo')) $('#rmlogo').onclick = async () => { await api('/hotel/me', { method: 'PATCH', body: { logo: '' } }); route(); };
+    $('#pf').onsubmit = async (e) => {
+      e.preventDefault();
+      const f = new FormData(e.target);
+      const body = { description: f.get('description'), about: f.get('about'), servicesText: f.get('servicesText'), amenities: f.getAll('amenities'), website: f.get('website'), instagram: f.get('instagram'), cancelPolicy: f.get('cancelPolicy'), paymentPolicy: f.get('paymentPolicy') };
+      if (f.get('currency') !== cur) { if (!confirm(t('currencyConfirm', { a: cur, b: f.get('currency') }))) return; body.currency = f.get('currency'); body.convertPrices = !!f.get('convertPrices'); }
+      try { await api('/hotel/me', { method: 'PATCH', body }); toast(t('saved')); route(); } catch (er) { fail(er); }
+    };
+  } else if (tab === 'rooms') {
+    shell('<div class="card pad" style="margin-bottom:20px"><h2>' + t('addRoom') + '</h2><form id="nr"><div class="row">' +
+      '<div class="field" style="flex:2"><label>' + t('roomName') + ' *</label><input name="name" required maxlength="80" placeholder="Deluxe Sea View"></div><div class="field"><label>' + t('guestsMax') + '</label><input type="number" name="maxGuests" min="1" max="20" value="2"></div>' +
+      '<div class="field"><label>' + t('bed') + '</label><input name="bed" placeholder="1 king bed"></div><div class="field"><label>' + t('area') + '</label><input type="number" name="area" min="5" max="1000" placeholder="m²"></div>' +
+      '<div class="field"><label>' + t('price') + ' (' + cur + ') *</label><input type="number" step="0.01" min="0.01" name="basePrice" required></div><div class="field"><label>' + t('quantity') + '</label><input type="number" name="count" min="0" max="500" value="5"></div></div>' +
+      '<div class="field"><label>' + t('roomFacilities') + '</label>' + ck('amenities', ROOM_AMEN_KEYS, ['wifi', 'tv']) + '</div><div class="field"><label>' + t('photo') + '</label><input type="file" name="photo" accept="image/png,image/jpeg,image/webp"></div><button class="btn gold">' + t('addRoom') + '</button></form></div>' +
+      '<h2>' + t('cabRooms') + '</h2><table><tr><th>' + t('roomName') + '</th><th>' + t('guestsMax') + '</th><th>' + t('bed') + '</th><th>m²</th><th>' + t('price') + ' (' + cur + ')</th><th>' + t('quantity') + '</th><th></th></tr>' +
+      d.rooms.map((r) => '<tr data-r="' + r.id + '"><td><input name="name" value="' + esc(r.name) + '" style="min-width:160px"></td><td><input name="maxGuests" type="number" min="1" max="20" value="' + r.maxGuests + '" style="width:70px"></td><td><input name="bed" value="' + esc(r.bed || '') + '" style="min-width:110px"></td><td><input name="area" type="number" value="' + (r.area || '') + '" style="width:70px"></td><td><input name="basePrice" type="number" step="0.01" value="' + r.basePrice + '" style="width:110px"></td><td><input name="count" type="number" min="0" max="500" value="' + r.count + '" style="width:70px"></td><td style="white-space:nowrap"><button class="btn sm" data-save="' + r.id + '">' + t('save') + '</button> <button class="btn sm danger" data-del="' + r.id + '">' + t('delete') + '</button></td></tr>').join('') + '</table>');
+    $('#nr').onsubmit = async (e) => {
+      e.preventDefault();
+      const f = new FormData(e.target);
+      try {
+        const image = await uploadImage(f.get('photo') && f.get('photo').size ? f.get('photo') : null);
+        await api('/hotel/rooms', { method: 'POST', body: { name: f.get('name'), maxGuests: +f.get('maxGuests'), bed: f.get('bed'), area: f.get('area') ? +f.get('area') : null, basePrice: +f.get('basePrice'), count: +f.get('count'), amenities: f.getAll('amenities'), image } });
+        toast(t('saved')); route();
+      } catch (er) { fail(er); }
+    };
+    document.querySelectorAll('[data-save]').forEach((b) => (b.onclick = async () => {
+      const row = document.querySelector('tr[data-r="' + b.dataset.save + '"]'), v = (n) => row.querySelector('[name=' + n + ']').value;
+      try { await api('/hotel/rooms/' + b.dataset.save, { method: 'PATCH', body: { name: v('name'), maxGuests: +v('maxGuests'), bed: v('bed'), area: v('area') ? +v('area') : null, basePrice: +v('basePrice'), count: +v('count') } }); toast(t('saved')); } catch (er) { fail(er); }
+    }));
+    document.querySelectorAll('[data-del]').forEach((b) => (b.onclick = async () => { if (!confirm(t('confirmDelete'))) return; try { await api('/hotel/rooms/' + b.dataset.del, { method: 'DELETE' }); route(); } catch (er) { fail(er); } }));
+  } else if (tab === 'inventory') {
+    shell('<div class="card pad"><h2>' + t('inventory') + '</h2><form id="inv"><div class="row"><div class="field"><label>' + t('roomName') + '</label><select name="room">' + d.rooms.map((r) => '<option value="' + r.id + '">' + esc(r.name) + '</option>').join('') + '</select></div>' +
+      '<div class="field"><label>' + t('from_') + '</label><input type="date" name="from" min="' + plus(0) + '" value="' + plus(1) + '" required></div><div class="field"><label>' + t('to_') + '</label><input type="date" name="to" min="' + plus(0) + '" value="' + plus(30) + '"></div>' +
+      '<div class="field"><label>' + t('availableRooms') + '</label><input type="number" name="available" min="0"></div><div class="field"><label>' + t('price') + ' (' + cur + ' / ' + t('perRoom') + ')</label><input type="number" step="0.01" min="0.01" name="price"></div>' +
+      '<div class="field"><label>' + t('closed') + '</label><select name="closed"><option value="">—</option><option value="1">✔</option><option value="0">✘</option></select></div></div><button class="btn">' + t('save') + '</button></form></div>');
+    $('#inv').onsubmit = async (e) => {
+      e.preventDefault(); const f = Object.fromEntries(new FormData(e.target));
+      const body = { from: f.from, to: f.to || undefined };
+      if (f.available !== '') body.available = +f.available; if (f.price !== '') body.price = +f.price; if (f.closed !== '') body.closed = f.closed === '1';
+      try { await api('/hotel/rooms/' + f.room + '/inventory', { method: 'PUT', body }); toast(t('saved')); } catch (er) { fail(er); }
+    };
+  } else {
+    shell(d.bookings.length ? '<table><tr><th>' + t('bookingRef') + '</th><th>' + t('fullName') + '</th><th>' + t('phone') + '</th><th>' + t('roomName') + '</th><th>' + t('checkIn') + '</th><th>' + t('checkOut') + '</th><th>' + t('hotelPayable') + '</th><th>' + t('payment') + '</th><th>' + t('status') + '</th><th>' + t('roomNumber') + '</th></tr>' +
+      d.bookings.map((b) => '<tr><td>' + esc(b.ref) + '</td><td>' + esc(b.guest.name) + '</td><td>' + esc(b.guest.phone) + '</td><td>' + esc(b.room) + '</td><td>' + esc(b.checkIn) + '</td><td>' + esc(b.checkOut) + '</td><td>' + money(b.hotelPayable, b.hotelCurrency) + '</td><td><span class="tag">' + esc(b.payMethod) + '</span></td><td>' + statusTag(b.status) + '</td><td><input style="width:80px" value="' + esc(b.roomNumber || '') + '" data-rn="' + b.id + '"></td></tr>').join('') + '</table>' : '<div class="card pad">' + t('noTrips') + '</div>');
+    document.querySelectorAll('[data-rn]').forEach((i) => (i.onchange = () => api('/hotel/bookings/' + i.dataset.rn, { method: 'PATCH', body: { roomNumber: i.value } }).then(() => toast(t('saved')))));
+  }
 });
 
 /* ---------- admin ---------- */

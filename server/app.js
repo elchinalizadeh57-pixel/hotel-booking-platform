@@ -1,5 +1,8 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
+const crypto = require('crypto');
 const { openDb } = require('./db');
 const { seed } = require('./seed');
 const A = require('./auth');
@@ -23,6 +26,8 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
   const db = openDb(dbFile);
   if (!db.prepare('SELECT 1 FROM users LIMIT 1').get()) seed(db);
   const secret = A.loadSecret(dbFile);
+  const uploadDir = dbFile === ':memory:' ? fs.mkdtempSync(path.join(os.tmpdir(), 'stayly-')) : path.join(path.dirname(dbFile), 'uploads');
+  fs.mkdirSync(uploadDir, { recursive: true });
   const outbox = createOutbox(db);
   const suppliers = createSuppliers(db);
   suppliers.ensureDefaults();
@@ -59,10 +64,12 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
   function roomOffer(rt, dates, rooms) {
     const inv = invMap(rt.id, dates);
     let min = Infinity;
+    const hc = get('SELECT currency FROM hotels WHERE id=?', rt.hotel_id)?.currency || 'USD';
+    const toUsd = (v) => Math.round((v / (P.RATES[hc] || 1)) * 10000) / 10000;
     const nights = dates.map((date) => {
       const r = inv.get(date) || { available: rt.count, price: null, closed: 0 };
       min = Math.min(min, r.closed ? 0 : r.available);
-      return { date, base: r.price ?? rt.base_price };
+      return { date, base: toUsd(r.price ?? rt.base_price) };
     });
     return { nights, available: min, ok: min >= rooms };
   }
@@ -98,6 +105,7 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
     id: h.id, name: h.name, country: h.country, city: h.city, address: h.address, lat: h.lat, lng: h.lng, stars: h.stars,
     description: h.description, images: J(h.images), amenities: J(h.amenities), meal: h.meal, checkin: h.checkin, checkout: h.checkout,
     cancelPolicy: h.cancel_policy, website: h.website, instagram: h.instagram, rating: h.rating,
+    logo: h.logo || null, about: h.about || '', services: String(h.services || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 40),
     payOptions: h.payment_policy === 'online' ? ['online'] : h.payment_policy === 'property' ? ['property'] : ['online', 'property'],
   });
   function viewerRole(user) {
@@ -118,7 +126,10 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
       roomNumber: b.room_number, createdAt: b.created_at, nights: snap.nights?.length,
     };
     if (viewer === 'admin') Object.assign(out, { totalUsd: b.total_usd, snapshot: snap, history: all('SELECT status,note,at FROM booking_history WHERE booking_id=? ORDER BY id', b.id) });
-    if (viewer === 'hotel') out.hotelPayableUsd = snap.hotelPayable;
+    if (viewer === 'hotel') {
+      const hc = get('SELECT currency FROM hotels WHERE id=?', b.hotel_id)?.currency || 'USD';
+      out.hotelCurrency = hc; out.hotelPayable = P.convert(snap.hotelPayable || 0, hc);
+    }
     return out;
   }
 
@@ -141,7 +152,8 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
     }
     res.json({ received: true });
   }));
-  app.use(express.json({ limit: '100kb' }));
+  const jsonSmall = express.json({ limit: '100kb' });
+  app.use((req, res, next) => (req.path === '/api/hotel/upload' ? next() : jsonSmall(req, res, next)));
   app.use((req, res, next) => {
     res.set({ 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'same-origin' });
     const t = (req.get('authorization') || '').replace(/^Bearer /, '');
@@ -474,21 +486,103 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
 
   // --- hotel cabinet
   const myHotel = (req) => { if (!req.user.hotel_id) throw fail(403, 'No hotel linked to your account yet'); return get('SELECT * FROM hotels WHERE id=?', req.user.hotel_id); };
+  const ROOM_AMEN = ['wifi', 'tv', 'ac', 'minibar', 'balcony', 'bathtub', 'kettle', 'safe'];
+  const HOTEL_AMEN = ['wifi', 'pool', 'spa', 'parking', 'restaurant', 'gym', 'ac'];
+  const roomOut = (r) => ({ id: r.id, name: r.name, maxGuests: r.max_guests, bed: r.bed, area: r.area, amenities: J(r.amenities), image: r.image, basePrice: r.base_price, count: r.count });
   app.get('/api/hotel/me', need('hotel'), wrap((req, res) => {
     const h = myHotel(req);
     const claim = get('SELECT * FROM hotel_claims WHERE user_id=? ORDER BY id DESC', req.user.id);
     res.json({
-      hotel: { ...publicHotel(h), paymentPolicy: h.payment_policy || 'both', status: h.status, priceModel: h.price_model, source: h.source }, claim,
-      rooms: all('SELECT * FROM room_types WHERE hotel_id=?', h.id).map((r) => ({ id: r.id, name: r.name, maxGuests: r.max_guests, basePrice: r.base_price, count: r.count })),
+      hotel: { ...publicHotel(h), paymentPolicy: h.payment_policy || 'both', currency: h.currency || 'USD', servicesText: h.services || '', status: h.status, priceModel: h.price_model, source: h.source }, claim,
+      rooms: all('SELECT * FROM room_types WHERE hotel_id=? ORDER BY id', h.id).map(roomOut),
       bookings: all('SELECT * FROM bookings WHERE hotel_id=? ORDER BY id DESC LIMIT 100', h.id).map((b) => serializeBooking(b, 'hotel')),
     });
   }));
   app.get('/api/hotel/status', need('hotel'), (req, res) => res.json({ linked: !!req.user.hotel_id, claim: get('SELECT * FROM hotel_claims WHERE user_id=? ORDER BY id DESC', req.user.id) || null }));
+  const httpsOrEmpty = (v, name) => { v = String(v ?? '').trim(); if (v && !/^https:\/\//i.test(v)) throw fail(400, name + ' must start with https://'); return v.slice(0, 300); };
+  const ownUpload = (h, url) => { if (!new RegExp('^/uploads/h' + h.id + '-[0-9a-f]{16}\\.(png|jpg|webp)$').test(url)) throw fail(400, 'Invalid image'); return url; };
   app.patch('/api/hotel/me', need('hotel'), wrap((req, res) => {
     const h = myHotel(req), b = req.body || {};
-    run('UPDATE hotels SET description=COALESCE(?,description), website=COALESCE(?,website), instagram=COALESCE(?,instagram), cancel_policy=COALESCE(?,cancel_policy), payment_policy=COALESCE(?,payment_policy) WHERE id=?',
-      b.description ?? null, b.website ?? null, b.instagram ?? null, b.cancelPolicy ?? null, ['online', 'property', 'both'].includes(b.paymentPolicy) ? b.paymentPolicy : null, h.id);
-    audit(req.user.id, 'hotel.update', { id: h.id });
+    const set = {};
+    if (b.description != null) set.description = String(b.description).slice(0, 600);
+    if (b.about != null) set.about = String(b.about).slice(0, 5000);
+    if (b.servicesText != null) set.services = String(b.servicesText).slice(0, 3000);
+    if (b.cancelPolicy != null) set.cancel_policy = String(b.cancelPolicy).slice(0, 300);
+    if (b.website != null) set.website = httpsOrEmpty(b.website, 'website');
+    if (b.instagram != null) set.instagram = httpsOrEmpty(b.instagram, 'instagram');
+    if (['online', 'property', 'both'].includes(b.paymentPolicy)) set.payment_policy = b.paymentPolicy;
+    if (Array.isArray(b.amenities)) set.amenities = JSON.stringify(b.amenities.filter((x) => HOTEL_AMEN.includes(x)));
+    if (b.logo !== undefined) set.logo = b.logo ? ownUpload(h, b.logo) : null;
+    if (b.currency && b.currency !== (h.currency || 'USD')) {
+      if (!P.CURRENCIES.includes(b.currency)) throw fail(400, 'Unsupported currency');
+      const from = h.currency || 'USD', factor = P.RATES[b.currency] / P.RATES[from];
+      const conv = (v) => (b.currency === 'UZS' ? Math.round(v * factor) : P.round2(v * factor));
+      tx(() => {
+        if (b.convertPrices) {
+          for (const r of all('SELECT id,base_price FROM room_types WHERE hotel_id=?', h.id)) {
+            run('UPDATE room_types SET base_price=? WHERE id=?', conv(r.base_price), r.id);
+            for (const i of all('SELECT date,price FROM inventory WHERE room_type_id=? AND price IS NOT NULL', r.id)) run('UPDATE inventory SET price=? WHERE room_type_id=? AND date=?', conv(i.price), r.id, i.date);
+          }
+        }
+        run('UPDATE hotels SET currency=? WHERE id=?', b.currency, h.id);
+      });
+    }
+    const keys = Object.keys(set);
+    if (keys.length) run(`UPDATE hotels SET ${keys.map((k) => k + '=?').join(', ')} WHERE id=?`, ...keys.map((k) => set[k]), h.id);
+    audit(req.user.id, 'hotel.update', { id: h.id, fields: [...keys, ...(b.currency ? ['currency'] : [])] });
+    res.json({ ok: true });
+  }));
+
+  // image upload (PNG/JPEG/WebP, <= 500 KB, verified by magic bytes), stored on disk and served from /uploads
+  app.post('/api/hotel/upload', need('hotel'), express.json({ limit: '800kb' }), wrap((req, res) => {
+    const h = myHotel(req);
+    const m = String(req.body?.dataUrl || '').match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/);
+    if (!m) throw fail(400, 'Only PNG, JPEG or WebP images are accepted');
+    const buf = Buffer.from(m[2], 'base64');
+    if (buf.length > 500 * 1024) throw fail(413, 'Image is larger than 500 KB');
+    const sig = { png: buf.subarray(0, 4).toString('hex') === '89504e47', jpeg: buf.subarray(0, 3).toString('hex') === 'ffd8ff', webp: buf.subarray(0, 4).toString() === 'RIFF' && buf.subarray(8, 12).toString() === 'WEBP' };
+    if (!sig[m[1]]) throw fail(400, 'File content does not match its type');
+    const name = `h${h.id}-${crypto.randomBytes(8).toString('hex')}.${m[1] === 'jpeg' ? 'jpg' : m[1]}`;
+    fs.writeFileSync(path.join(uploadDir, name), buf);
+    res.status(201).json({ url: '/uploads/' + name });
+  }));
+
+  // room types (manual add / edit / delete)
+  function roomFields(b, partial) {
+    const out = {};
+    const num = (v, lo, hi, name) => { v = Number(v); if (!Number.isFinite(v) || v < lo || v > hi) throw fail(400, name + ' must be between ' + lo + ' and ' + hi); return v; };
+    if (!partial || b.name !== undefined) { const n = String(b.name || '').trim(); if (!n || n.length > 80) throw fail(400, 'Room name is required (max 80 characters)'); out.name = n; }
+    if (!partial || b.maxGuests !== undefined) out.max_guests = Math.round(num(b.maxGuests ?? 2, 1, 20, 'maxGuests'));
+    if (!partial || b.bed !== undefined) out.bed = String(b.bed || '').slice(0, 60);
+    if (!partial || b.area !== undefined) out.area = b.area === '' || b.area == null ? null : Math.round(num(b.area, 5, 1000, 'area'));
+    if (!partial || b.basePrice !== undefined) out.base_price = num(b.basePrice, 0.01, 1e9, 'basePrice');
+    if (!partial || b.count !== undefined) out.count = Math.round(num(b.count ?? 1, 0, 500, 'count'));
+    if (b.amenities !== undefined) out.amenities = JSON.stringify((b.amenities || []).filter((x) => ROOM_AMEN.includes(x)));
+    return out;
+  }
+  app.post('/api/hotel/rooms', need('hotel'), wrap((req, res) => {
+    const h = myHotel(req), f = roomFields(req.body || {}, false);
+    if (req.body?.image) f.image = ownUpload(h, req.body.image);
+    const id = Number(run('INSERT INTO room_types(hotel_id,name,max_guests,bed,area,base_price,count,amenities,image) VALUES(?,?,?,?,?,?,?,?,?)', h.id, f.name, f.max_guests, f.bed, f.area, f.base_price, f.count, f.amenities || '[]', f.image || null).lastInsertRowid);
+    audit(req.user.id, 'room.create', { id });
+    res.status(201).json(roomOut(get('SELECT * FROM room_types WHERE id=?', id)));
+  }));
+  app.patch('/api/hotel/rooms/:id', need('hotel'), wrap((req, res) => {
+    const h = myHotel(req), rt = get('SELECT * FROM room_types WHERE id=? AND hotel_id=?', Number(req.params.id), h.id);
+    if (!rt) throw fail(404, 'Room not found');
+    const f = roomFields(req.body || {}, true);
+    if (req.body?.image !== undefined) f.image = req.body.image ? ownUpload(h, req.body.image) : null;
+    const keys = Object.keys(f);
+    if (keys.length) run(`UPDATE room_types SET ${keys.map((k) => k + '=?').join(', ')} WHERE id=?`, ...keys.map((k) => f[k]), rt.id);
+    audit(req.user.id, 'room.update', { id: rt.id, fields: keys });
+    res.json(roomOut(get('SELECT * FROM room_types WHERE id=?', rt.id)));
+  }));
+  app.delete('/api/hotel/rooms/:id', need('hotel'), wrap((req, res) => {
+    const h = myHotel(req), rt = get('SELECT * FROM room_types WHERE id=? AND hotel_id=?', Number(req.params.id), h.id);
+    if (!rt) throw fail(404, 'Room not found');
+    if (get('SELECT 1 FROM bookings WHERE room_type_id=?', rt.id)) throw fail(409, 'This room type has bookings and cannot be deleted. Set its quantity to 0 or close sales instead.');
+    tx(() => { run('DELETE FROM inventory WHERE room_type_id=?', rt.id); run('DELETE FROM room_types WHERE id=?', rt.id); });
+    audit(req.user.id, 'room.delete', { id: rt.id });
     res.json({ ok: true });
   }));
   app.put('/api/hotel/rooms/:id/inventory', need('hotel'), wrap((req, res) => {
@@ -700,6 +794,7 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
 
   // --- static + errors
   app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
+  app.use('/uploads', express.static(uploadDir, { maxAge: '7d', index: false, setHeaders: (res) => res.set('Content-Security-Policy', "default-src 'none'") }));
   app.use(express.static(path.join(__dirname, '..', 'public')));
   app.use((err, req, res, next) => { // eslint-disable-line
     if (err.type === 'entity.parse.failed') err = fail(400, 'Invalid JSON');

@@ -150,3 +150,9 @@ main#app{flex:1 0 auto;width:100%}
 .prose h2{margin:28px 0 8px;font-size:22px}
 .prose ul,.prose ol{padding-left:22px}.prose li{margin:6px 0}
 .prose p{margin:10px 0}
+
+/* hotel logo + services */
+.hlogo{display:block;width:68px;height:68px;border-radius:18px;object-fit:cover;background:#fff;border:2px solid rgba(255,255,255,.75);margin-bottom:12px;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+.hcard .img{position:relative}
+.clogo{position:absolute;top:12px;left:12px;width:46px;height:46px;border-radius:12px;object-fit:cover;background:#fff;border:2px solid #fff;box-shadow:0 4px 12px rgba(0,0,0,.25)}
+.svc{list-style:none;padding:0;margin:0}.svc li{padding:6px 0 6px 26px;position:relative}.svc li:before{content:"✓";position:absolute;left:0;color:var(--blue);font-weight:800}
