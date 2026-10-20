@@ -7,7 +7,7 @@
 const SCOPE_ORDER = { agency: 5, room: 4, hotel: 3, country: 2, platform: 1 };
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 
-const RATES = { USD: 1, AZN: 1.7, UZS: 12600 };
+const RATES = { USD: 1, EUR: 0.92, RUB: 92, AZN: 1.7, UZS: 12600 };
 const CURRENCIES = Object.keys(RATES);
 function setRates(r) { for (const k of Object.keys(r)) if (r[k] > 0) RATES[k] = r[k]; RATES.USD = 1; }
 function convert(usd, cur) {

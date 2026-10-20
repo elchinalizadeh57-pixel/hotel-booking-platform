@@ -631,12 +631,12 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
   app.put('/api/admin/rates', admin, wrap((req, res) => {
     const r = req.body || {};
     tx(() => {
-      for (const c of ['AZN', 'UZS']) if (r[c] != null) {
+      for (const c of ['EUR', 'RUB', 'AZN', 'UZS']) if (r[c] != null) {
         if (!(r[c] > 0)) throw fail(400, 'Invalid rate for ' + c);
         run('INSERT INTO currency_rates(currency,per_usd,source) VALUES(?,?,?)', c, +r[c], 'admin:' + req.user.email);
       }
     });
-    P.setRates(Object.fromEntries(['AZN', 'UZS'].filter((c) => r[c] != null).map((c) => [c, +r[c]])));
+    P.setRates(Object.fromEntries(['EUR', 'RUB', 'AZN', 'UZS'].filter((c) => r[c] != null).map((c) => [c, +r[c]])));
     audit(req.user.id, 'rates.update', r);
     res.json({ rates: P.RATES });
   }));

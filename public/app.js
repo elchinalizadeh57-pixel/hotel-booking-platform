@@ -3,7 +3,8 @@ const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const S = { user: null, token: localStorage.getItem('tok'), lang: localStorage.getItem('lang') || ['ru', 'en', 'uz', 'az'].find((l) => (navigator.language || '').toLowerCase().startsWith(l)) || 'ru', cur: localStorage.getItem('cur') || 'USD', meta: null };
 const t = (k, v) => { let s = (I18N[S.lang] && I18N[S.lang][k]) || I18N.en[k] || k; if (v) for (const x in v) s = s.replace('{' + x + '}', v[x]); return s; };
-const SYM = { USD: '$', AZN: '₼', UZS: 'soʻm' };
+const SYM = { USD: '$', EUR: '€', RUB: '₽', AZN: '₼', UZS: 'soʻm' };
+const rateOf = (c) => (S.meta && S.meta.rates[c]) || 1;
 const money = (n, c = S.cur) => (c === 'UZS' ? Math.round(n).toLocaleString('ru-RU') + ' ' + SYM[c] : SYM[c] + ' ' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 const FALLBACK = 'linear-gradient(135deg,#0b2a5b,#0a6cff)';
 const bg = (u) => `style="background-image:url('${esc(u || '')}'),${FALLBACK}"`;
@@ -30,7 +31,7 @@ function renderTop() {
   const cab = u ? { admin: ['#/admin', t('admin')], hotel: ['#/cabinet', t('cabinet')], agency: ['#/agency', t('agencyDesk')], tourist: ['#/trips', t('trips')] }[u.role] : null;
   $('#top').innerHTML = `<div class="wrap"><a class="logo" href="#/"><i>S</i>Stayly</a>
   <nav class="nav"><a href="#/search">${t('stays')}</a>${u ? `<a href="#/trips">${t('trips')}</a>` : ''}${cab && u.role !== 'tourist' ? `<a href="${cab[0]}">${cab[1]}</a>` : ''}</nav>
-  <select id="cur" aria-label="${t('currency')}">${['USD', 'AZN', 'UZS'].map((c) => `<option ${c === S.cur ? 'selected' : ''}>${c}</option>`).join('')}</select>
+  <select id="cur" aria-label="${t('currency')}">${['USD', 'EUR', 'RUB', 'AZN', 'UZS'].map((c) => `<option ${c === S.cur ? 'selected' : ''}>${c}</option>`).join('')}</select>
   <select id="lang" aria-label="${t('language')}">${[['ru', 'RU'], ['en', 'EN'], ['uz', 'UZ'], ['az', 'AZ']].map(([k, l]) => `<option value="${k}" ${k === S.lang ? 'selected' : ''}>${l}</option>`).join('')}</select>
   ${u ? `<a class="pill hide-sm" href="#/security" title="${t('security')}">🔒 ${esc(u.name || u.email)}</a><button class="pill" id="out">${t('logout')}</button>` : `<a class="pill" href="#/login">${t('login')}</a><a class="btn gold sm" href="#/register">${t('register')}</a>`}</div>`;
   $('#cur').onchange = (e) => { S.cur = e.target.value; localStorage.setItem('cur', S.cur); route(); };
@@ -160,7 +161,7 @@ R(/^\/checkout\/(\d+)$/, async (app, m, q) => {
    <div class="row"><div class="field"><label>${t('fullName')}</label><input name="name" required value="${esc(S.user.name || '')}"></div><div class="field"><label>${t('email')}</label><input type="email" name="email" required value="${esc(S.user.email)}"></div><div class="field"><label>${t('phone')}</label><input name="phone"></div></div>
    <h2 style="margin-top:20px">${t('payment')}</h2>
    <label class="chk" style="display:flex;gap:8px;margin-bottom:8px"><input type="radio" name="pay" value="online" checked> ${t('payOnline')}</label>
-   ${agencyOk ? `<label class="chk" style="display:flex;gap:8px"><input type="radio" name="pay" value="contract"> ${t('payContract')} <span class="muted small">(${t('available')}: ${money((S.user.agency.creditLimit - S.user.agency.debt) * ({ USD: 1, AZN: 1.7, UZS: 12600 }[S.cur]), S.cur)})</span></label>` : ''}
+   ${agencyOk ? `<label class="chk" style="display:flex;gap:8px"><input type="radio" name="pay" value="contract"> ${t('payContract')} <span class="muted small">(${t('available')}: ${money((S.user.agency.creditLimit - S.user.agency.debt) * (rateOf(S.cur)), S.cur)})</span></label>` : ''}
    <div id="err"></div><button class="btn gold" style="margin-top:18px;width:100%;padding:14px" id="go">${t('confirmBooking')}</button></form>
    <aside class="card pad"><div ${bg(hotel.images[0])} style="height:120px;border-radius:12px;background-size:cover;background-image:url('${esc(hotel.images[0])}'),${FALLBACK}"></div><h3 style="margin-top:12px">${esc(hotel.name)}</h3><div class="muted small">${esc(offer.name)}</div><hr style="border:0;border-top:1px solid var(--line)">
    <p class="small">${esc(q.checkIn)} → ${esc(q.checkOut)}<br>${hotel.nights} ${t('nights')} · ${q.rooms || 1} ${t('rooms')} · ${q.adults || 2} ${t('adults')}</p>${offer.priceType === 'agency' ? `<span class="tag green">${t('agencyRate')}</span>` : ''}<div class="price">${money(offer.total, offer.currency)}</div><div class="muted small">${t('priceFinal')}</div></aside></div></div>`;
@@ -256,7 +257,7 @@ R(/^\/agency$/, async (app) => {
   const a = S.user.agency, bs = await api('/bookings');
   app.innerHTML = `<div class="wrap sec"><h1>${esc(a.name)} ${a.status === 'approved' ? '<span class="tag green">✔ ' + a.status + '</span>' : `<span class="tag gold">${esc(a.status)}</span>`}</h1>
    ${a.status !== 'approved' ? `<div class="notice">${t('pendingAgency')}</div>` : ''}
-   <div class="kpi"><div><b>${money(a.creditLimit * { USD: 1, AZN: 1.7, UZS: 12600 }[S.cur])}</b><span>${t('creditLimit')}</span></div><div><b>${money(a.debt * { USD: 1, AZN: 1.7, UZS: 12600 }[S.cur])}</b><span>${t('debt')}</span></div><div><b>${bs.length}</b><span>${t('bookings')}</span></div></div>
+   <div class="kpi"><div><b>${money(a.creditLimit * rateOf(S.cur))}</b><span>${t('creditLimit')}</span></div><div><b>${money(a.debt * rateOf(S.cur))}</b><span>${t('debt')}</span></div><div><b>${bs.length}</b><span>${t('bookings')}</span></div></div>
    <p><a class="btn gold" href="#/search">${t('search')}</a></p><h2>${t('bookings')}</h2>${bookTable(bs)}</div>`;
 });
 const bookTable = (bs) => bs.length ? `<table><tr><th>${t('bookingRef')}</th><th>Hotel</th><th>${t('fullName')}</th><th>${t('checkIn')}</th><th>${t('checkOut')}</th><th>${t('total')}</th><th>${t('status')}</th></tr>${bs.map((b) => `<tr><td><a href="#/booking/${b.id}">${esc(b.ref)}</a></td><td>${esc(b.hotel)}</td><td>${esc(b.guest.name)}</td><td>${esc(b.checkIn)}</td><td>${esc(b.checkOut)}</td><td>${money(b.total, b.currency)}</td><td>${statusTag(b.status)}</td></tr>`).join('')}</table>` : `<div class="card pad">${t('noTrips')}</div>`;
@@ -328,12 +329,12 @@ R(/^\/admin$/, async (app, m, q) => {
     const i = await api('/admin/integrations');
     shell(`<div class="kpi"><div><b>${esc(i.payment)}</b><span>Payment provider</span></div>${Object.entries(i.outbox.channels).map(([k, v]) => `<div><b>${v ? '✅' : '—'}</b><span>${k}</span></div>`).join('')}</div>
     <div class="card pad" style="margin-bottom:16px"><h3>Suppliers / PMS</h3><table><tr><th>Supplier</th><th>Adapter</th><th>Last sync</th><th>Status</th><th></th></tr>${i.suppliers.map((x) => `<tr><td>${esc(x.name)}</td><td>${esc(x.adapter)}</td><td>${esc(x.lastSync || '—')}</td><td>${x.lastStatus === 'ok' ? '<span class="tag green">ok</span>' : `<span class="tag red">${esc(x.lastStatus || '—')}</span> ${esc(x.lastError || '')}`}</td><td><button class="btn sm" data-sync="${x.id}">Sync now</button></td></tr>`).join('')}</table></div>
-    <div class="card pad" style="margin-bottom:16px"><h3>Currency rates (per 1 USD)</h3><form id="rt" class="row"><div class="field"><label>AZN</label><input name="AZN" type="number" step="0.0001" value="${i.rates.AZN}"></div><div class="field"><label>UZS</label><input name="UZS" type="number" step="0.01" value="${i.rates.UZS}"></div><div class="field"><label>&nbsp;</label><button class="btn">${t('save')}</button></div></form></div>
+    <div class="card pad" style="margin-bottom:16px"><h3>Currency rates (per 1 USD)</h3><form id="rt" class="row">${['EUR', 'RUB', 'AZN', 'UZS'].map((c) => `<div class="field"><label>${c}</label><input name="${c}" type="number" step="0.0001" value="${i.rates[c]}"></div>`).join('')}<div class="field"><label>&nbsp;</label><button class="btn">${t('save')}</button></div></form></div>
     <div class="card pad"><h3>Outbox (Telegram · CRM · Sheets · Email) <button class="btn sm ghost" id="pr">Process now</button></h3><table><tr><th>#</th><th>Channel</th><th>Status</th><th>Attempts</th><th>Error</th><th></th></tr>${i.outbox.recent.map((o) => `<tr><td>${o.id}</td><td>${esc(o.channel)}</td><td><span class="tag ${o.status === 'done' ? 'green' : o.status === 'failed' ? 'red' : 'gold'}">${esc(o.status)}</span></td><td>${o.attempts}</td><td class="small muted">${esc(o.error || '')}</td><td>${o.status === 'failed' ? `<button class="btn sm ghost" data-ob="${o.id}">Retry</button>` : ''}</td></tr>`).join('')}</table></div>`);
     act('[data-sync]', (b) => api('/admin/suppliers/' + b.dataset.sync + '/sync', { method: 'POST' }));
     act('[data-ob]', (b) => api('/admin/outbox/' + b.dataset.ob + '/retry', { method: 'POST' }));
     $('#pr').onclick = async () => { await api('/admin/outbox/process', { method: 'POST' }); route(); };
-    $('#rt').onsubmit = async (e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); try { await api('/admin/rates', { method: 'PUT', body: { AZN: +f.AZN, UZS: +f.UZS } }); S.meta = await api('/meta'); toast(t('saved')); route(); } catch (er) { toast(er.message); } };
+    $('#rt').onsubmit = async (e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); try { await api('/admin/rates', { method: 'PUT', body: { EUR: +f.EUR, RUB: +f.RUB, AZN: +f.AZN, UZS: +f.UZS } }); S.meta = await api('/meta'); toast(t('saved')); route(); } catch (er) { toast(er.message); } };
   } else if (tab === 'content') {
     const ps = await api('/admin/pages');
     shell(`<div class="card pad"><h3>CMS pages</h3><form id="cp"><div class="row"><div class="field"><label>Slug</label><input name="slug" value="about" pattern="[a-z0-9-]+" required></div><div class="field"><label>Lang</label><select name="lang"><option>en</option><option>az</option><option>ru</option><option>uz</option></select></div><div class="field"><label>Title</label><input name="title" required></div></div><div class="field"><label>Body</label><textarea name="body" rows="6"></textarea></div><button class="btn">${t('save')}</button></form></div>

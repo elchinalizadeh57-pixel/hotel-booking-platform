@@ -130,3 +130,13 @@ test('registration validation and agency approval flow', async () => {
   const me = await api('/api/me', { token: r.data.token });
   assert.equal(me.data.agency.status, 'approved');
 });
+
+test('EUR and RUB are supported display currencies', async () => {
+  const usd = (await api(`/api/hotels/1?${q}&currency=USD`)).data.offers[0].perNight;
+  const eur = (await api(`/api/hotels/1?${q}&currency=EUR`)).data.offers[0];
+  const rub = (await api(`/api/hotels/1?${q}&currency=RUB`)).data.offers[0];
+  assert.equal(eur.currency, 'EUR'); assert.equal(rub.currency, 'RUB');
+  assert.equal(eur.perNight, Math.round(usd * 0.92 * 100) / 100);
+  assert.equal(rub.perNight, Math.round(usd * 92 * 100) / 100);
+  assert.deepEqual((await api('/api/meta')).data.currencies, ['USD', 'EUR', 'RUB', 'AZN', 'UZS']);
+});
