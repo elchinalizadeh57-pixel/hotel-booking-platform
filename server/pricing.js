@@ -9,6 +9,7 @@ const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 const RATES = { USD: 1, AZN: 1.7, UZS: 12600 };
 const CURRENCIES = Object.keys(RATES);
+function setRates(r) { for (const k of Object.keys(r)) if (r[k] > 0) RATES[k] = r[k]; RATES.USD = 1; }
 function convert(usd, cur) {
   const r = RATES[cur] || 1;
   return cur === 'UZS' ? Math.round(usd * r) : round2(usd * r);
@@ -97,4 +98,4 @@ function quoteStay({ hotel, roomId, nights, rooms, role, agencyId, rules }) {
   };
 }
 
-module.exports = { round2, convert, RATES, CURRENCIES, nightPrice, quoteStay, pickRule, findConflict };
+module.exports = { setRates, round2, convert, RATES, CURRENCIES, nightPrice, quoteStay, pickRule, findConflict };

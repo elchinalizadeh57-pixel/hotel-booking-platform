@@ -10,7 +10,7 @@ Requires **Node.js ≥ 22.5** (uses the built-in `node:sqlite`).
 ```bash
 npm install
 npm start          # http://localhost:3000
-npm test           # 17 tests: pricing engine, roles, double-booking, payments, idempotency
+npm test           # 27 tests: pricing, roles, double-booking, payments, idempotency, integrations
 ```
 
 The SQLite database (`data/hotel.db`) is created and seeded with demo data on first start. Env: `PORT`, `DB_PATH`, `AUTH_SECRET`.
@@ -34,9 +34,19 @@ The SQLite database (`data/hotel.db`) is created and seeded with demo data on fi
 - **Hotel cabinet (§10)**, **Admin (§11):** dashboard & funnel, bookings, hotels, claims, agencies/credit limits, pricing rules, users, audit log.
 - **i18n & currency (§15), responsive UI (§19), in-app notifications (§13).**
 
-## Not implemented (needs external contracts/decisions — spec §12, §21 phases 4–5)
+## Integrations (all configurable via environment — see `.env.example`)
 
-Real payment provider, external supplier/PMS/Channel Manager adapters, CRM, Telegram, Google Sheets, e-mail delivery, MFA, SEO/CMS. Exchange rates are fixed in `server/pricing.js`. See "decisions to confirm" at the end of the specification (taxes, commission order, refund policy…).
+| Area | Status |
+|---|---|
+| Payments | Demo gateway by default; **Stripe Checkout** via `PAYMENT_PROVIDER=stripe` with signed, de-duplicated webhook (`/api/webhooks/stripe`) |
+| Supplier / PMS / Channel Manager | Adapter interface + built-in mock supplier + generic REST adapter (`docs/SUPPLIER_API.md`); sync, duplicate matching, supplier-confirmed bookings, supplier cancellation |
+| Telegram, CRM webhook, Google Sheets, e-mail (SMTP) | Transactional outbox with retry/backoff, dedupe, error log, manual retry (Admin → Integrations); no guest PII to Telegram/Sheets |
+| MFA | TOTP (RFC 6238) for any account; `REQUIRE_ADMIN_MFA=1` enforces it for the admin panel |
+| Exchange rates | Editable by admin with history; stored in each booking snapshot |
+| SEO / CMS | Crawlable `/h/:id` pages with JSON-LD + Open Graph, `sitemap.xml`, `robots.txt`, editable CMS pages |
+
+Real credentials (Stripe, Telegram, Google service account, CRM, SMTP, supplier contract) must be supplied by you; the code paths are covered by tests with stubbed HTTP.
+Still out of scope: legal/tax rules per market and the business decisions listed at the end of the specification.
 
 ## Structure
 
@@ -44,4 +54,11 @@ Real payment provider, external supplier/PMS/Channel Manager adapters, CRM, Tele
 server/  app.js (API) · pricing.js (engine) · db.js (schema) · seed.js · auth.js
 public/  SPA (index.html, app.js, i18n.js, style.css)
 tests/   node:test suites
+```
+
+## Docker
+
+```bash
+cp .env.example .env
+docker compose up --build
 ```

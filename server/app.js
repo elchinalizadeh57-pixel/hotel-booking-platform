@@ -4,6 +4,10 @@ const { openDb } = require('./db');
 const { seed } = require('./seed');
 const A = require('./auth');
 const P = require('./pricing');
+const TOTP = require('./totp');
+const Pay = require('./payments');
+const { createOutbox } = require('./integrations/outbox');
+const { createSuppliers } = require('./suppliers');
 
 const HOLD_MIN = 15;
 const TRANSITIONS = {
@@ -18,6 +22,11 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
   const db = openDb(dbFile);
   if (!db.prepare('SELECT 1 FROM users LIMIT 1').get()) seed(db);
   const secret = A.loadSecret(dbFile);
+  const outbox = createOutbox(db);
+  const suppliers = createSuppliers(db);
+  suppliers.ensureDefaults();
+  const savedRates = db.prepare('SELECT currency, per_usd FROM currency_rates WHERE id IN (SELECT MAX(id) FROM currency_rates GROUP BY currency)').all();
+  P.setRates(Object.fromEntries(savedRates.map((r) => [r.currency, r.per_usd])));
   const nn = (p) => p.map((x) => (x === undefined ? null : x));
   const get = (sql, ...p) => db.prepare(sql).get(...nn(p));
   const all = (sql, ...p) => db.prepare(sql).all(...nn(p));
@@ -108,8 +117,24 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
   }
 
   // ---------- app ----------
+  const wrap = (fn) => (req, res, next) => { try { Promise.resolve(fn(req, res)).catch(next); } catch (e) { next(e); } };
   const app = express();
   app.disable('x-powered-by');
+  // Payment provider webhook: needs the raw body for signature verification, so it is mounted before express.json.
+  app.post('/api/webhooks/stripe', express.raw({ type: '*/*', limit: '200kb' }), wrap(async (req, res) => {
+    const raw = req.body.toString('utf8');
+    if (!Pay.verifyStripeSignature(raw, req.get('stripe-signature'), process.env.STRIPE_WEBHOOK_SECRET)) throw fail(400, 'Invalid signature');
+    const ev = JSON.parse(raw);
+    if (run('INSERT OR IGNORE INTO webhook_events(id,provider) VALUES(?,?)', ev.id, 'stripe').changes === 0) return res.json({ received: true, duplicate: true });
+    if (ev.type === 'checkout.session.completed' && ev.data?.object?.payment_status === 'paid') {
+      const b = get('SELECT * FROM bookings WHERE id=?', Number(ev.data.object.metadata?.booking_id));
+      if (b && b.status === 'on_hold') {
+        run('INSERT INTO payments(booking_id,amount_usd,status,last4) VALUES(?,?,?,?)', b.id, b.total_usd, 'paid', 'stripe');
+        await finalizeBooking(b, 'Paid online (Stripe)');
+      }
+    }
+    res.json({ received: true });
+  }));
   app.use(express.json({ limit: '100kb' }));
   app.use((req, res, next) => {
     res.set({ 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'same-origin' });
@@ -123,9 +148,8 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
     if (roles.length && !roles.includes(req.user.role)) return next(fail(403, 'Forbidden'));
     next();
   };
-  const wrap = (fn) => (req, res, next) => { try { Promise.resolve(fn(req, res)).catch(next); } catch (e) { next(e); } };
   const userOut = (u) => {
-    const o = { id: u.id, email: u.email, name: u.name, role: u.role, agencyId: u.agency_id, hotelId: u.hotel_id };
+    const o = { id: u.id, email: u.email, name: u.name, role: u.role, agencyId: u.agency_id, hotelId: u.hotel_id, mfa: !!u.mfa_enabled };
     if (u.agency_id) { const a = get('SELECT name,status,credit_limit,debt FROM agencies WHERE id=?', u.agency_id); o.agency = { name: a.name, status: a.status, creditLimit: a.credit_limit, debt: a.debt }; }
     return o;
   };
@@ -163,7 +187,28 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
       attempts.set(key, [...a, now]);
       throw fail(401, 'Invalid email or password');
     }
+    if (u.mfa_enabled) {
+      if (!req.body?.code) return res.status(401).json({ error: 'Authentication code required', mfaRequired: true });
+      if (!TOTP.verify(u.mfa_secret, req.body.code)) { attempts.set(key, [...a, now]); throw fail(401, 'Invalid authentication code'); }
+    }
     res.json({ token: A.sign({ uid: u.id }, secret), user: userOut(u) });
+  }));
+  app.post('/api/auth/mfa/setup', need(), (req, res) => {
+    const sec = TOTP.newSecret();
+    run('UPDATE users SET mfa_secret=?, mfa_enabled=0 WHERE id=?', sec, req.user.id);
+    res.json({ secret: sec, uri: TOTP.uri(sec, req.user.email) });
+  });
+  app.post('/api/auth/mfa/enable', need(), wrap((req, res) => {
+    if (!req.user.mfa_secret || !TOTP.verify(req.user.mfa_secret, req.body?.code)) throw fail(400, 'Invalid code');
+    run('UPDATE users SET mfa_enabled=1 WHERE id=?', req.user.id);
+    audit(req.user.id, 'mfa.enable', {});
+    res.json({ ok: true });
+  }));
+  app.post('/api/auth/mfa/disable', need(), wrap((req, res) => {
+    if (!req.user.mfa_enabled || !TOTP.verify(req.user.mfa_secret, req.body?.code)) throw fail(400, 'Invalid code');
+    run('UPDATE users SET mfa_enabled=0, mfa_secret=NULL WHERE id=?', req.user.id);
+    audit(req.user.id, 'mfa.disable', {});
+    res.json({ ok: true });
   }));
   app.get('/api/me', need(), (req, res) => res.json(userOut(req.user)));
   app.get('/api/notifications', need(), (req, res) => res.json(all('SELECT id,text,at FROM notifications WHERE user_id=? ORDER BY id DESC LIMIT 30', req.user.id)));
@@ -237,7 +282,7 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
 
   // --- bookings
   function refGen() { return 'HB' + Date.now().toString(36).toUpperCase().slice(-5) + Math.random().toString(36).slice(2, 5).toUpperCase(); }
-  app.post('/api/bookings', need('tourist', 'agency', 'admin'), wrap((req, res) => {
+  app.post('/api/bookings', need('tourist', 'agency', 'admin'), wrap(async (req, res) => {
     expireHolds();
     const b = req.body || {};
     const idem = req.get('Idempotency-Key') || null;
@@ -272,7 +317,7 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
         if (r.changes !== 1) throw fail(409, 'Not enough rooms available for the selected dates');
       }
       const snapshot = { ...quote.snapshot, currency: cur, rate: P.RATES[cur], rateSource: 'platform-fixed', priceModel: h.price_model };
-      const status = payMethod === 'contract' ? 'confirmed' : 'on_hold';
+      const status = payMethod === 'contract' ? 'pending' : 'on_hold';
       const id = Number(run(`INSERT INTO bookings(ref,user_id,hotel_id,room_type_id,check_in,check_out,rooms,adults,children,guest_name,guest_email,guest_phone,
         channel,pay_method,status,total_usd,currency,total_cur,snapshot,hold_expires,idem_key) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         refGen(), req.user.id, h.id, rt.id, b.checkIn, b.checkOut, rooms, adults, children, g.name, g.email, g.phone || '',
@@ -284,10 +329,39 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
       audit(req.user.id, 'booking.create', { ref: row.ref });
       return row;
     });
-    if (created.status === 'confirmed') notifyConfirmed(created);
-    res.status(201).json(serializeBooking(created, 'user'));
+    emit('booking.created', created);
+    if (created.pay_method === 'contract') await finalizeBooking(created, 'Settled on contract');
+    res.status(201).json(serializeBooking(get('SELECT * FROM bookings WHERE id=?', created.id), 'user'));
   }));
+  function bookingSummary(b) {
+    const h = get('SELECT name FROM hotels WHERE id=?', b.hotel_id);
+    const nights = nightsList2(b.check_in, b.check_out).length;
+    return { ref: b.ref, hotel: h?.name, checkIn: b.check_in, checkOut: b.check_out, nights, total: b.total_cur, currency: b.currency, channel: b.channel, status: b.status, contact: { name: b.guest_name, email: b.guest_email, phone: b.guest_phone } };
+  }
+  const emit = (event, b) => { try { outbox.emit(event, bookingSummary(get('SELECT * FROM bookings WHERE id=?', b.id))); } catch (e) { console.error('outbox', e.message); } };
+  /** Confirm a booking; supplier hotels must be confirmed by the supplier before we show "confirmed". */
+  async function finalizeBooking(b, how) {
+    const h = get('SELECT * FROM hotels WHERE id=?', b.hotel_id);
+    if (!h.supplier_id) { tx(() => setStatus(b, 'confirmed', how)); return notifyConfirmed(b); }
+    tx(() => setStatus(b, 'pending', 'Awaiting supplier confirmation'));
+    try {
+      const room = get('SELECT * FROM room_types WHERE id=?', b.room_type_id);
+      const r = await suppliers.book(h, room, b, { name: b.guest_name, email: b.guest_email, phone: b.guest_phone });
+      tx(() => { run('UPDATE bookings SET external_ref=? WHERE id=?', r.externalRef, b.id); setStatus(b, 'confirmed', how + ' + supplier ' + r.externalRef); });
+      notifyConfirmed(b);
+    } catch (e) {
+      tx(() => {
+        releaseInventory(b);
+        if (b.pay_method === 'contract') { const u = get('SELECT agency_id FROM users WHERE id=?', b.user_id); run('UPDATE agencies SET debt=MAX(0,debt-?) WHERE id=?', b.total_usd, u.agency_id); }
+        setStatus(b, 'failed', 'Supplier error: ' + e.message);
+        if (b.pay_method === 'online' && get("SELECT 1 FROM payments WHERE booking_id=? AND status='paid'", b.id)) { run('INSERT INTO refunds(booking_id,amount_usd) VALUES(?,?)', b.id, b.total_usd); setStatus(b, 'refunded', 'Auto refund: supplier rejected'); }
+      });
+      emit('booking.cancelled', b);
+      throw fail(502, 'The supplier could not confirm this booking. You have not been charged.');
+    }
+  }
   function notifyConfirmed(b) {
+    emit('booking.confirmed', b);
     notify(b.user_id, `Booking ${b.ref} confirmed`);
     for (const u of all('SELECT id FROM users WHERE hotel_id=?', b.hotel_id)) notify(u.id, `New booking ${b.ref}`);
   }
@@ -301,18 +375,23 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
     res.json(rows.map((b) => serializeBooking(b, 'user')));
   });
   app.get('/api/bookings/:id', need(), wrap((req, res) => res.json(serializeBooking(ownBooking(req), 'user'))));
-  app.post('/api/bookings/:id/pay', need(), wrap((req, res) => {
+  app.post('/api/bookings/:id/pay', need(), wrap(async (req, res) => {
     expireHolds();
     const b = ownBooking(req);
     if (b.status !== 'on_hold') throw fail(409, 'Booking is not awaiting payment');
+    if (Pay.provider() === 'stripe') {
+      const base = process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
+      const s = await Pay.createStripeCheckout({ booking: b, successUrl: `${base}/#/booking/${b.id}`, cancelUrl: `${base}/#/pay/${b.id}` });
+      run('UPDATE bookings SET provider_ref=? WHERE id=?', s.id, b.id);
+      return res.json({ redirectUrl: s.url });
+    }
     const num = String(req.body?.card?.number || '').replace(/\s/g, '');
     if (!/^\d{12,19}$/.test(num)) throw fail(400, 'Invalid card number');
     // Demo gateway: card data is never stored, only the last 4 digits. Cards ending 0000 are declined.
     const declined = num.endsWith('0000');
     run('INSERT INTO payments(booking_id,amount_usd,status,last4) VALUES(?,?,?,?)', b.id, b.total_usd, declined ? 'failed' : 'paid', num.slice(-4));
-    if (declined) { audit(req.user.id, 'payment.failed', { ref: b.ref }); throw fail(402, 'Payment declined'); }
-    tx(() => setStatus(b, 'confirmed', 'Paid online', req.user.id));
-    notifyConfirmed(b);
+    if (declined) { audit(req.user.id, 'payment.failed', { ref: b.ref }); emit('payment.failed', b); throw fail(402, 'Payment declined'); }
+    await finalizeBooking(b, 'Paid online');
     res.json(serializeBooking(get('SELECT * FROM bookings WHERE id=?', b.id), 'user'));
   }));
   function cancelBooking(b, uid, note) {
@@ -337,9 +416,17 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
       return get('SELECT * FROM bookings WHERE id=?', b.id);
     });
   }
-  app.post('/api/bookings/:id/cancel', need(), wrap((req, res) => {
+  async function cancelFull(b, uid, note) {
+    if (b.external_ref && b.status === 'confirmed') {
+      try { await suppliers.cancel(b.hotel_id, b.external_ref); } catch (e) { throw fail(502, 'Supplier cancellation failed: ' + e.message); }
+    }
+    const out = cancelBooking(b, uid, note);
+    emit('booking.cancelled', out);
+    return out;
+  }
+  app.post('/api/bookings/:id/cancel', need(), wrap(async (req, res) => {
     expireHolds();
-    res.json(serializeBooking(cancelBooking(ownBooking(req), req.user.id, 'Cancelled by user'), 'user'));
+    res.json(serializeBooking(await cancelFull(ownBooking(req), req.user.id, 'Cancelled by user'), 'user'));
   }));
 
   // --- hotel cabinet
@@ -391,7 +478,12 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
   }));
 
   // --- admin
-  const admin = need('admin');
+  const adminBase = need('admin');
+  const admin = (req, res, next) => adminBase(req, res, (e) => {
+    if (e) return next(e);
+    if (process.env.REQUIRE_ADMIN_MFA === '1' && !req.user.mfa_enabled) return next(Object.assign(fail(403, 'Enable two-factor authentication to use the admin panel'), { mfaSetupRequired: true }));
+    next();
+  });
   app.get('/api/admin/stats', admin, (req, res) => {
     const s = (sql) => get(sql) || {};
     const ok = "status IN ('confirmed','partially_refunded')";
@@ -477,17 +569,78 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
     res.json({ ok: true });
   });
   app.get('/api/admin/bookings', admin, (req, res) => res.json(all('SELECT * FROM bookings ORDER BY id DESC LIMIT 200').map((b) => serializeBooking(b, 'admin'))));
-  app.post('/api/admin/bookings/:id/status', admin, wrap((req, res) => {
+  app.post('/api/admin/bookings/:id/status', admin, wrap(async (req, res) => {
     expireHolds();
     const b = get('SELECT * FROM bookings WHERE id=?', Number(req.params.id));
     const to = req.body?.status;
     if (!b) throw fail(404, 'Not found');
-    if (to === 'cancelled') return res.json(serializeBooking(cancelBooking(b, req.user.id, 'Cancelled by admin'), 'admin'));
+    if (to === 'cancelled') return res.json(serializeBooking(await cancelFull(b, req.user.id, 'Cancelled by admin'), 'admin'));
     if (!(TRANSITIONS[b.status] || []).includes(to)) throw fail(409, `Transition ${b.status} → ${to} is not allowed`);
     tx(() => setStatus(b, to, 'Changed by admin', req.user.id));
     res.json(serializeBooking(get('SELECT * FROM bookings WHERE id=?', b.id), 'admin'));
   }));
   app.get('/api/admin/audit', admin, (req, res) => res.json(all('SELECT a.*, u.email FROM audit_logs a LEFT JOIN users u ON u.id=a.user_id ORDER BY a.id DESC LIMIT 200')));
+
+  // --- integrations, suppliers, rates, content
+  app.get('/api/admin/integrations', admin, (req, res) => res.json({
+    payment: Pay.provider(), outbox: outbox.status(), suppliers: all('SELECT id,code,name,adapter,active,last_sync lastSync,last_status lastStatus,last_error lastError FROM suppliers'),
+    rates: P.RATES, ratesHistory: all('SELECT currency,per_usd perUsd,source,at FROM currency_rates ORDER BY id DESC LIMIT 20'),
+  }));
+  app.post('/api/admin/outbox/:id/retry', admin, (req, res) => { outbox.retry(Number(req.params.id)); res.json({ ok: true }); });
+  app.post('/api/admin/outbox/process', admin, wrap(async (req, res) => res.json({ processed: await outbox.process() })));
+  app.post('/api/admin/suppliers/:id/sync', admin, wrap(async (req, res) => {
+    const sup = get('SELECT * FROM suppliers WHERE id=?', Number(req.params.id));
+    if (!sup) throw fail(404, 'Not found');
+    const r = await suppliers.sync(sup);
+    audit(req.user.id, 'supplier.sync', { id: sup.id, ...r });
+    res.json(r);
+  }));
+  app.put('/api/admin/rates', admin, wrap((req, res) => {
+    const r = req.body || {};
+    tx(() => {
+      for (const c of ['AZN', 'UZS']) if (r[c] != null) {
+        if (!(r[c] > 0)) throw fail(400, 'Invalid rate for ' + c);
+        run('INSERT INTO currency_rates(currency,per_usd,source) VALUES(?,?,?)', c, +r[c], 'admin:' + req.user.email);
+      }
+    });
+    P.setRates(Object.fromEntries(['AZN', 'UZS'].filter((c) => r[c] != null).map((c) => [c, +r[c]])));
+    audit(req.user.id, 'rates.update', r);
+    res.json({ rates: P.RATES });
+  }));
+  app.get('/api/pages/:slug', (req, res) => {
+    const p = get('SELECT title,body FROM cms_pages WHERE slug=? AND lang=?', req.params.slug, req.query.lang || 'en') || get("SELECT title,body FROM cms_pages WHERE slug=? AND lang='en'", req.params.slug);
+    if (!p) return res.status(404).json({ error: 'Not found' });
+    res.json(p);
+  });
+  app.get('/api/admin/pages', admin, (req, res) => res.json(all('SELECT slug,lang,title,body FROM cms_pages ORDER BY slug,lang')));
+  app.put('/api/admin/pages/:slug/:lang', admin, wrap((req, res) => {
+    const { slug, lang } = req.params;
+    if (!/^[a-z0-9-]{1,40}$/.test(slug) || !['en', 'az', 'ru', 'uz'].includes(lang)) throw fail(400, 'Invalid slug/lang');
+    run('INSERT INTO cms_pages(slug,lang,title,body) VALUES(?,?,?,?) ON CONFLICT(slug,lang) DO UPDATE SET title=excluded.title, body=excluded.body', slug, lang, String(req.body?.title || '').slice(0, 200), String(req.body?.body || '').slice(0, 20000));
+    audit(req.user.id, 'cms.update', { slug, lang });
+    res.json({ ok: true });
+  }));
+
+  // --- SEO: crawlable hotel pages, sitemap, robots
+  const baseUrl = (req) => process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
+  const xe = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  app.get('/h/:id', (req, res) => {
+    const h = get("SELECT * FROM hotels WHERE id=? AND status='approved'", Number(req.params.id));
+    if (!h) return res.status(404).send('Not found');
+    const img = J(h.images)[0] || '';
+    const ld = { '@context': 'https://schema.org', '@type': 'Hotel', name: h.name, description: h.description, image: img, starRating: { '@type': 'Rating', ratingValue: h.stars },
+      address: { '@type': 'PostalAddress', streetAddress: h.address, addressLocality: h.city, addressCountry: h.country } };
+    const url = `${baseUrl(req)}/h/${h.id}`;
+    res.type('html').send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${xe(h.name)} - ${xe(h.city)} | Stayly</title>
+<meta name="description" content="${xe(h.description)}"><link rel="canonical" href="${url}"><meta property="og:title" content="${xe(h.name)}"><meta property="og:description" content="${xe(h.description)}"><meta property="og:image" content="${xe(img)}"><meta property="og:url" content="${url}">
+<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script></head><body><h1>${xe(h.name)}</h1><p>${xe(h.city)}, ${xe(h.country)} - ${h.stars} stars</p><p>${xe(h.description)}</p><p><a href="/#/hotel/${h.id}">Book now</a></p>
+<script>location.replace('/#/hotel/${h.id}')</script></body></html>`);
+  });
+  app.get('/sitemap.xml', (req, res) => {
+    const u = baseUrl(req);
+    res.type('xml').send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${u}/</loc></url>${all("SELECT id FROM hotels WHERE status='approved'").map((h) => `<url><loc>${u}/h/${h.id}</loc></url>`).join('')}</urlset>`);
+  });
+  app.get('/robots.txt', (req, res) => res.type('text').send(`User-agent: *\nDisallow: /api/\nSitemap: ${baseUrl(req)}/sitemap.xml\n`));
 
   // --- static + errors
   app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
@@ -498,9 +651,17 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
     res.status(err.status || 500).json({ error: err.status ? err.message : 'Internal error' });
   });
 
-  const timer = setInterval(() => { try { expireHolds(); } catch (e) { console.error(e); } }, 60000);
-  timer.unref();
-  return { app, db, close: () => { clearInterval(timer); db.close(); } };
+  const timers = [
+    setInterval(() => { try { expireHolds(); } catch (e) { console.error(e); } }, 60000),
+    setInterval(() => outbox.process().catch((e) => console.error('outbox', e.message)), 15000),
+    setInterval(() => suppliers.syncAll().catch((e) => console.error('sync', e.message)), (+process.env.SUPPLIER_SYNC_MIN || 30) * 60000),
+  ];
+  timers.forEach((t) => t.unref());
+  if (!get('SELECT 1 FROM cms_pages LIMIT 1')) {
+    for (const [slug, title, body] of [['about', 'About Stayly', 'Stayly connects travellers and travel agencies with hotels in Azerbaijan and Uzbekistan.'], ['terms', 'Terms of use', 'Edit this page in Admin > Content.'], ['privacy', 'Privacy policy', 'Edit this page in Admin > Content.']]) run('INSERT INTO cms_pages(slug,lang,title,body) VALUES(?,?,?,?)', slug, 'en', title, body);
+  }
+  suppliers.syncAll().catch((e) => console.error('sync', e.message));
+  return { app, db, outbox, suppliers, close: () => { timers.forEach(clearInterval); db.close(); } };
 }
 
 module.exports = { createApp };

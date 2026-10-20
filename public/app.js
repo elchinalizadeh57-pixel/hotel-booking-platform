@@ -32,11 +32,11 @@ function renderTop() {
   <nav class="nav"><a href="#/search">${t('stays')}</a>${u ? `<a href="#/trips">${t('trips')}</a>` : ''}${cab && u.role !== 'tourist' ? `<a href="${cab[0]}">${cab[1]}</a>` : ''}</nav>
   <select id="cur" aria-label="${t('currency')}">${['USD', 'AZN', 'UZS'].map((c) => `<option ${c === S.cur ? 'selected' : ''}>${c}</option>`).join('')}</select>
   <select id="lang" aria-label="${t('language')}">${[['az', 'AZ'], ['ru', 'RU'], ['uz', 'UZ'], ['en', 'EN']].map(([k, l]) => `<option value="${k}" ${k === S.lang ? 'selected' : ''}>${l}</option>`).join('')}</select>
-  ${u ? `<span class="hide-sm small">${esc(u.name || u.email)}</span><button class="pill" id="out">${t('logout')}</button>` : `<a class="pill" href="#/login">${t('login')}</a><a class="btn gold sm" href="#/register">${t('register')}</a>`}</div>`;
+  ${u ? `<a class="pill hide-sm" href="#/security" title="${t('security')}">🔒 ${esc(u.name || u.email)}</a><button class="pill" id="out">${t('logout')}</button>` : `<a class="pill" href="#/login">${t('login')}</a><a class="btn gold sm" href="#/register">${t('register')}</a>`}</div>`;
   $('#cur').onchange = (e) => { S.cur = e.target.value; localStorage.setItem('cur', S.cur); route(); };
   $('#lang').onchange = (e) => { S.lang = e.target.value; localStorage.setItem('lang', S.lang); document.documentElement.lang = S.lang; renderTop(); route(); };
   if ($('#out')) $('#out').onclick = () => logout();
-  $('#foot').textContent = t('footer');
+  $('#foot').innerHTML = `<div>${['about', 'terms', 'privacy'].map((p) => `<a href="#/page/${p}" style="color:#b9c6e0;margin:0 10px">${t('p_' + p)}</a>`).join('')}</div><div style="margin-top:8px">${esc(t('footer'))}</div>`;
 }
 
 /* ---------- router ---------- */
@@ -188,7 +188,7 @@ R(/^\/pay\/(\d+)$/, async (app, m) => {
   const tick = setInterval(() => { const s = Math.max(0, Math.floor((end - Date.now()) / 1000)); if (!$('#cd')) return clearInterval(tick); $('#cd').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }, 500);
   $('#pf').onsubmit = async (e) => {
     e.preventDefault();
-    try { await api(`/bookings/${b.id}/pay`, { method: 'POST', body: { card: { number: e.target.number.value } } }); location.hash = '#/booking/' + b.id; }
+    try { const r = await api(`/bookings/${b.id}/pay`, { method: 'POST', body: { card: { number: e.target.number.value } } }); if (r.redirectUrl) location.href = r.redirectUrl; else location.hash = '#/booking/' + b.id; }
     catch (er) { $('#err').innerHTML = `<div class="err">${esc(er.message)}</div>`; }
   };
 });
@@ -209,13 +209,16 @@ R(/^\/trips$/, async (app) => {
 
 /* ---------- auth ---------- */
 R(/^\/login$/, async (app) => {
-  app.innerHTML = `<div class="wrap"><div class="auth card pad"><h2>${t('signInTitle')}</h2><form id="lf"><div class="field"><label>${t('email')}</label><input type="email" name="email" required autocomplete="username"></div><div class="field"><label>${t('password')}</label><input type="password" name="password" required autocomplete="current-password"></div><div id="err"></div><button class="btn" style="width:100%">${t('login')}</button></form>
+  app.innerHTML = `<div class="wrap"><div class="auth card pad"><h2>${t('signInTitle')}</h2><form id="lf"><div class="field"><label>${t('email')}</label><input type="email" name="email" required autocomplete="username"></div><div class="field"><label>${t('password')}</label><input type="password" name="password" required autocomplete="current-password"></div><div id="mfa"></div><div id="err"></div><button class="btn" style="width:100%">${t('login')}</button></form>
    <p class="small muted">${t('noAccount')} <a href="#/register">${t('register')}</a></p>
    <details class="small"><summary>${t('demo')}</summary><p>admin@hotel.local / Admin123!<br>tourist@hotel.local / Tourist123!<br>agency@hotel.local / Agency123! (${t('agency')} ✓)<br>agency2@hotel.local / Agency123! (pending)<br>hotel@hotel.local / Hotel123!</p></details></div></div>`;
   $('#lf').onsubmit = async (e) => {
     e.preventDefault();
-    try { const f = Object.fromEntries(new FormData(e.target)); const d = await api('/auth/login', { method: 'POST', body: f }); afterAuth(d); }
-    catch (er) { $('#err').innerHTML = `<div class="err">${esc(er.message)}</div>`; }
+    try { const f = Object.fromEntries(new FormData(e.target)); const d = await api('/auth/login', { method: 'POST', body: f, quiet: true }); afterAuth(d); }
+    catch (er) {
+      if (er.message.includes('code required')) $('#mfa').innerHTML = `<div class="field"><label>${t('mfaCode')}</label><input name="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" autofocus required></div>`;
+      else $('#err').innerHTML = `<div class="err">${esc(er.message)}</div>`;
+    }
   };
 });
 function afterAuth(d) {
@@ -283,7 +286,7 @@ R(/^\/cabinet$/, async (app) => {
 R(/^\/admin$/, async (app, m, q) => {
   if (S.user?.role !== 'admin') { location.hash = '#/login'; return; }
   const tab = q.tab || 'dashboard';
-  const tabs = [['dashboard', 'dashboard'], ['bookings', 'bookings'], ['hotels', 'hotels'], ['claims', 'claims'], ['agencies', 'agencies'], ['rules', 'rules'], ['users', 'users'], ['audit', 'audit']];
+  const tabs = [['dashboard', 'dashboard'], ['bookings', 'bookings'], ['hotels', 'hotels'], ['claims', 'claims'], ['agencies', 'agencies'], ['rules', 'rules'], ['integrations', 'integrations'], ['content', 'content'], ['users', 'users'], ['audit', 'audit']];
   const shell = (inner) => { app.innerHTML = `<div class="wrap sec"><div class="tabs">${tabs.map(([k, l]) => `<button class="${k === tab ? 'on' : ''}" data-t="${k}">${t(l)}</button>`).join('')}</div>${inner}</div>`; document.querySelectorAll('[data-t]').forEach((b) => (b.onclick = () => (location.hash = '#/admin?tab=' + b.dataset.t))); };
   const act = (sel, fn) => document.querySelectorAll(sel).forEach((b) => (b.onclick = async () => { try { await fn(b); route(); } catch (e) { toast(e.message); } }));
   const usd = (n) => '$' + Number(n || 0).toFixed(2);
@@ -321,6 +324,21 @@ R(/^\/admin$/, async (app, m, q) => {
     <table><tr><th>#</th><th>${t('kind')}</th><th>${t('scope')}</th><th>%</th><th>${t('dateFrom')}</th><th>${t('dateTo')}</th><th></th></tr>${rs.map((r) => `<tr style="${r.active ? '' : 'opacity:.45'}"><td>${r.id}</td><td>${esc(r.kind)}</td><td>${esc(r.scope)} ${esc(r.scope_ref || '')}</td><td>${r.percent}</td><td>${esc(r.date_from || '—')}</td><td>${esc(r.date_to || '—')}</td><td>${r.active ? `<button class="btn sm ghost" data-rd="${r.id}">${t('deactivate')}</button>` : ''}</td></tr>`).join('')}</table>`);
     $('#ar').onsubmit = async (e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); f.percent = +f.percent; try { await api('/admin/rules', { method: 'POST', body: f }); route(); } catch (er) { $('#err').innerHTML = `<div class="err">${esc(er.message)}</div>`; } };
     act('[data-rd]', (b) => api('/admin/rules/' + b.dataset.rd, { method: 'DELETE' }));
+  } else if (tab === 'integrations') {
+    const i = await api('/admin/integrations');
+    shell(`<div class="kpi"><div><b>${esc(i.payment)}</b><span>Payment provider</span></div>${Object.entries(i.outbox.channels).map(([k, v]) => `<div><b>${v ? '✅' : '—'}</b><span>${k}</span></div>`).join('')}</div>
+    <div class="card pad" style="margin-bottom:16px"><h3>Suppliers / PMS</h3><table><tr><th>Supplier</th><th>Adapter</th><th>Last sync</th><th>Status</th><th></th></tr>${i.suppliers.map((x) => `<tr><td>${esc(x.name)}</td><td>${esc(x.adapter)}</td><td>${esc(x.lastSync || '—')}</td><td>${x.lastStatus === 'ok' ? '<span class="tag green">ok</span>' : `<span class="tag red">${esc(x.lastStatus || '—')}</span> ${esc(x.lastError || '')}`}</td><td><button class="btn sm" data-sync="${x.id}">Sync now</button></td></tr>`).join('')}</table></div>
+    <div class="card pad" style="margin-bottom:16px"><h3>Currency rates (per 1 USD)</h3><form id="rt" class="row"><div class="field"><label>AZN</label><input name="AZN" type="number" step="0.0001" value="${i.rates.AZN}"></div><div class="field"><label>UZS</label><input name="UZS" type="number" step="0.01" value="${i.rates.UZS}"></div><div class="field"><label>&nbsp;</label><button class="btn">${t('save')}</button></div></form></div>
+    <div class="card pad"><h3>Outbox (Telegram · CRM · Sheets · Email) <button class="btn sm ghost" id="pr">Process now</button></h3><table><tr><th>#</th><th>Channel</th><th>Status</th><th>Attempts</th><th>Error</th><th></th></tr>${i.outbox.recent.map((o) => `<tr><td>${o.id}</td><td>${esc(o.channel)}</td><td><span class="tag ${o.status === 'done' ? 'green' : o.status === 'failed' ? 'red' : 'gold'}">${esc(o.status)}</span></td><td>${o.attempts}</td><td class="small muted">${esc(o.error || '')}</td><td>${o.status === 'failed' ? `<button class="btn sm ghost" data-ob="${o.id}">Retry</button>` : ''}</td></tr>`).join('')}</table></div>`);
+    act('[data-sync]', (b) => api('/admin/suppliers/' + b.dataset.sync + '/sync', { method: 'POST' }));
+    act('[data-ob]', (b) => api('/admin/outbox/' + b.dataset.ob + '/retry', { method: 'POST' }));
+    $('#pr').onclick = async () => { await api('/admin/outbox/process', { method: 'POST' }); route(); };
+    $('#rt').onsubmit = async (e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); try { await api('/admin/rates', { method: 'PUT', body: { AZN: +f.AZN, UZS: +f.UZS } }); S.meta = await api('/meta'); toast(t('saved')); route(); } catch (er) { toast(er.message); } };
+  } else if (tab === 'content') {
+    const ps = await api('/admin/pages');
+    shell(`<div class="card pad"><h3>CMS pages</h3><form id="cp"><div class="row"><div class="field"><label>Slug</label><input name="slug" value="about" pattern="[a-z0-9-]+" required></div><div class="field"><label>Lang</label><select name="lang"><option>en</option><option>az</option><option>ru</option><option>uz</option></select></div><div class="field"><label>Title</label><input name="title" required></div></div><div class="field"><label>Body</label><textarea name="body" rows="6"></textarea></div><button class="btn">${t('save')}</button></form></div>
+    <table style="margin-top:16px"><tr><th>Slug</th><th>Lang</th><th>Title</th></tr>${ps.map((p) => `<tr><td>${esc(p.slug)}</td><td>${esc(p.lang)}</td><td>${esc(p.title)}</td></tr>`).join('')}</table>`);
+    $('#cp').onsubmit = async (e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); try { await api(`/admin/pages/${f.slug}/${f.lang}`, { method: 'PUT', body: { title: f.title, body: f.body } }); toast(t('saved')); route(); } catch (er) { toast(er.message); } };
   } else if (tab === 'users') {
     const us = await api('/admin/users');
     shell(`<table><tr><th>#</th><th>${t('email')}</th><th>${t('fullName')}</th><th>Role</th><th>Agency</th><th>Hotel</th></tr>${us.map((u) => `<tr><td>${u.id}</td><td>${esc(u.email)}</td><td>${esc(u.name)}</td><td><span class="tag">${esc(u.role)}</span></td><td>${u.agencyId || ''}</td><td>${u.hotelId || ''}</td></tr>`).join('')}</table>`);
@@ -328,6 +346,29 @@ R(/^\/admin$/, async (app, m, q) => {
     const lg = await api('/admin/audit');
     shell(`<table><tr><th>${'Time'}</th><th>User</th><th>Action</th><th>Detail</th></tr>${lg.map((l) => `<tr><td>${esc(l.at)}</td><td>${esc(l.email || '—')}</td><td>${esc(l.action)}</td><td class="small muted">${esc(l.detail)}</td></tr>`).join('')}</table>`);
   }
+});
+
+R(/^\/page\/([a-z0-9-]+)$/, async (app, m) => {
+  const p = await api(`/pages/${m[1]}?lang=${S.lang}`);
+  app.innerHTML = `<div class="wrap sec"><div class="card pad"><h1>${esc(p.title)}</h1><div style="white-space:pre-wrap">${esc(p.body)}</div></div></div>`;
+});
+
+R(/^\/security$/, async (app) => {
+  if (!S.user) { location.hash = '#/login'; return; }
+  await loadUser();
+  const draw = (setup) => {
+    app.innerHTML = `<div class="wrap"><div class="auth card pad"><h2>🔒 ${t('security')}</h2><p>${t('mfa')}: ${S.user.mfa ? '<span class="tag green">ON</span>' : '<span class="tag red">OFF</span>'}</p>
+    ${S.user.mfa ? `<form id="mf"><div class="field"><label>${t('mfaCode')}</label><input name="code" inputmode="numeric" maxlength="6" required></div><div id="err"></div><button class="btn danger">${t('mfaDisable')}</button></form>`
+    : setup ? `<p class="small">${t('mfaHelp')}</p><p><b style="word-break:break-all">${esc(setup.secret)}</b></p><p class="small muted" style="word-break:break-all">${esc(setup.uri)}</p><form id="mf"><div class="field"><label>${t('mfaCode')}</label><input name="code" inputmode="numeric" maxlength="6" required></div><div id="err"></div><button class="btn">${t('mfaEnable')}</button></form>`
+    : `<button class="btn" id="st">${t('mfaSetup')}</button>`}</div></div>`;
+    if ($('#st')) $('#st').onclick = async () => draw(await api('/auth/mfa/setup', { method: 'POST' }));
+    if ($('#mf')) $('#mf').onsubmit = async (e) => {
+      e.preventDefault();
+      try { await api(S.user.mfa ? '/auth/mfa/disable' : '/auth/mfa/enable', { method: 'POST', body: { code: e.target.code.value } }); await loadUser(); toast(t('saved')); draw(); }
+      catch (er) { $('#err').innerHTML = `<div class="err">${esc(er.message)}</div>`; }
+    };
+  };
+  draw();
 });
 
 /* ---------- boot ---------- */

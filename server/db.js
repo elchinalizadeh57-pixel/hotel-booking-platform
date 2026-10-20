@@ -56,9 +56,23 @@ CREATE TABLE IF NOT EXISTS notifications(
   id INTEGER PRIMARY KEY, user_id INTEGER, text TEXT, read INTEGER DEFAULT 0, at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS audit_logs(
   id INTEGER PRIMARY KEY, user_id INTEGER, action TEXT, detail TEXT, at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS outbox(
+  id INTEGER PRIMARY KEY, channel TEXT NOT NULL, dedupe TEXT UNIQUE, payload TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
+  attempts INTEGER NOT NULL DEFAULT 0, next_at TEXT, error TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, done_at TEXT);
+CREATE TABLE IF NOT EXISTS webhook_events(id TEXT PRIMARY KEY, provider TEXT, at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS suppliers(id INTEGER PRIMARY KEY, code TEXT UNIQUE, name TEXT, adapter TEXT, active INTEGER DEFAULT 1,
+  last_sync TEXT, last_status TEXT, last_error TEXT);
+CREATE TABLE IF NOT EXISTS supplier_mappings(supplier_id INTEGER, external_id TEXT, kind TEXT, local_id INTEGER, PRIMARY KEY(supplier_id, kind, external_id));
+CREATE TABLE IF NOT EXISTS currency_rates(id INTEGER PRIMARY KEY, currency TEXT, per_usd REAL, source TEXT, at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS cms_pages(slug TEXT, lang TEXT, title TEXT, body TEXT, PRIMARY KEY(slug, lang));
 CREATE TABLE IF NOT EXISTS analytics_events(
   id INTEGER PRIMARY KEY, type TEXT, ref TEXT, at TEXT DEFAULT CURRENT_TIMESTAMP);
 `);
+  const cols = (t) => db.prepare(`PRAGMA table_info(${t})`).all().map((c) => c.name);
+  const add = (t, c, def) => { if (!cols(t).includes(c)) db.exec(`ALTER TABLE ${t} ADD COLUMN ${c} ${def}`); };
+  add('users', 'mfa_secret', 'TEXT'); add('users', 'mfa_enabled', 'INTEGER DEFAULT 0');
+  add('hotels', 'supplier_id', 'INTEGER'); add('hotels', 'external_id', 'TEXT'); add('room_types', 'external_id', 'TEXT');
+  add('bookings', 'external_ref', 'TEXT'); add('bookings', 'provider_ref', 'TEXT');
   return db;
 }
 
