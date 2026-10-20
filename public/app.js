@@ -1,7 +1,7 @@
 /* Stayly SPA — vanilla JS, hash routing */
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const S = { user: null, token: localStorage.getItem('tok'), lang: localStorage.getItem('lang') || 'az', cur: localStorage.getItem('cur') || 'USD', meta: null };
+const S = { user: null, token: localStorage.getItem('tok'), lang: localStorage.getItem('lang') || ['ru', 'en', 'uz', 'az'].find((l) => (navigator.language || '').toLowerCase().startsWith(l)) || 'ru', cur: localStorage.getItem('cur') || 'USD', meta: null };
 const t = (k, v) => { let s = (I18N[S.lang] && I18N[S.lang][k]) || I18N.en[k] || k; if (v) for (const x in v) s = s.replace('{' + x + '}', v[x]); return s; };
 const SYM = { USD: '$', AZN: '₼', UZS: 'soʻm' };
 const money = (n, c = S.cur) => (c === 'UZS' ? Math.round(n).toLocaleString('ru-RU') + ' ' + SYM[c] : SYM[c] + ' ' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
@@ -31,7 +31,7 @@ function renderTop() {
   $('#top').innerHTML = `<div class="wrap"><a class="logo" href="#/"><i>S</i>Stayly</a>
   <nav class="nav"><a href="#/search">${t('stays')}</a>${u ? `<a href="#/trips">${t('trips')}</a>` : ''}${cab && u.role !== 'tourist' ? `<a href="${cab[0]}">${cab[1]}</a>` : ''}</nav>
   <select id="cur" aria-label="${t('currency')}">${['USD', 'AZN', 'UZS'].map((c) => `<option ${c === S.cur ? 'selected' : ''}>${c}</option>`).join('')}</select>
-  <select id="lang" aria-label="${t('language')}">${[['az', 'AZ'], ['ru', 'RU'], ['uz', 'UZ'], ['en', 'EN']].map(([k, l]) => `<option value="${k}" ${k === S.lang ? 'selected' : ''}>${l}</option>`).join('')}</select>
+  <select id="lang" aria-label="${t('language')}">${[['ru', 'RU'], ['en', 'EN'], ['uz', 'UZ'], ['az', 'AZ']].map(([k, l]) => `<option value="${k}" ${k === S.lang ? 'selected' : ''}>${l}</option>`).join('')}</select>
   ${u ? `<a class="pill hide-sm" href="#/security" title="${t('security')}">🔒 ${esc(u.name || u.email)}</a><button class="pill" id="out">${t('logout')}</button>` : `<a class="pill" href="#/login">${t('login')}</a><a class="btn gold sm" href="#/register">${t('register')}</a>`}</div>`;
   $('#cur').onchange = (e) => { S.cur = e.target.value; localStorage.setItem('cur', S.cur); route(); };
   $('#lang').onchange = (e) => { S.lang = e.target.value; localStorage.setItem('lang', S.lang); document.documentElement.lang = S.lang; renderTop(); route(); };
