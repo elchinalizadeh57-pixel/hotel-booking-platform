@@ -113,3 +113,11 @@ th{background:#f0f4fb;font-size:12px;text-transform:uppercase;letter-spacing:.4p
  .hero2{min-height:92vh}.sbox.hero{border-radius:22px;flex-basis:100%;max-width:none;grid-template-columns:1fr 1fr}.sbox.hero>div:first-child,.sbox.hero>div:nth-child(4){grid-column:1/-1}
  .sbox.hero>div{border-right:0;border-bottom:1px solid rgba(255,255,255,.16)}.sbox.hero .btn{grid-column:1/-1;margin:8px}
 }
+
+/* StayGo-style header on the landing page: text links on the left, minimal selects, one orange button */
+.top.over .logo{display:none}
+.top.over .nav{margin-left:0;gap:30px}
+.top.over .nav a{padding:8px 0;border-radius:0;font-size:13px;font-weight:500;opacity:.95}
+.top.over .nav a:hover{background:none;text-decoration:underline;text-underline-offset:6px}
+.top.over select{background:transparent;border:0;font-size:12px;padding:4px 2px;opacity:.85}
+.top.over .wrap{height:72px}

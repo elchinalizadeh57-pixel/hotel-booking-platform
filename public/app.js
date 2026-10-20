@@ -34,7 +34,7 @@ function renderTop() {
   <nav class="nav"><a href="#/search">${t('explore')}</a><a href="#/search?sort=price">${t('deals')}</a><a href="#/destinations">${t('destinations')}</a>${u ? `<a href="#/trips">${t('trips')}</a>` : ''}${cab && u.role !== 'tourist' ? `<a href="${cab[0]}">${cab[1]}</a>` : ''}</nav>
   <select id="cur" aria-label="${t('currency')}">${['USD', 'EUR', 'RUB', 'AZN', 'UZS'].map((c) => `<option ${c === S.cur ? 'selected' : ''}>${c}</option>`).join('')}</select>
   <select id="lang" aria-label="${t('language')}">${[['ru', 'RU'], ['en', 'EN'], ['uz', 'UZ'], ['az', 'AZ']].map(([k, l]) => `<option value="${k}" ${k === S.lang ? 'selected' : ''}>${l}</option>`).join('')}</select>
-  ${u ? `<a class="pill hide-sm" href="#/security" title="${t('security')}">🔒 ${esc(u.name || u.email)}</a><button class="pill" id="out">${t('logout')}</button>` : `<a class="pill" href="#/register">${t('register')}</a><a class="btn gold sm" style="border-radius:99px;padding:8px 20px" href="#/login">${t('login')}</a>`}</div>`;
+  ${u ? `<a class="pill hide-sm" href="#/security" title="${t('security')}">🔒 ${esc(u.name || u.email)}</a><button class="pill" id="out">${t('logout')}</button>` : `<a class="btn gold sm" style="border-radius:99px;padding:8px 20px" href="#/login">${t('login')}</a>`}</div>`;
   $('#cur').onchange = (e) => { S.cur = e.target.value; localStorage.setItem('cur', S.cur); route(); };
   $('#lang').onchange = (e) => { S.lang = e.target.value; localStorage.setItem('lang', S.lang); document.documentElement.lang = S.lang; renderTop(); route(); };
   if ($('#out')) $('#out').onclick = () => logout();
