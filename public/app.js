@@ -49,7 +49,8 @@ async function route() {
   const [path, qs] = hash.split('?');
   const q = Object.fromEntries(new URLSearchParams(qs || ''));
   const app = $('#app');
-  $('#top').classList.toggle('over', path === '/');
+  $('#top').classList.toggle('over', path === '/' || path === '/search' || /^\/hotel\/\d+$/.test(path));
+  $('#top').classList.toggle('home', path === '/');
   for (const [re, fn] of routes) {
     const m = path.match(re);
     if (m) {
@@ -111,7 +112,7 @@ R(/^\/search$/, async (app, m, q) => {
   const params = new URLSearchParams({ ...q, currency: S.cur });
   const d = await api('/hotels?' + params);
   const keep = (k, v) => { const p = new URLSearchParams(q); if (v === '' || v == null) p.delete(k); else p.set(k, v); location.hash = '#/search?' + p; };
-  app.innerHTML = `<div class="wrap sec">${searchBox(q, true)}<div class="layout"><aside class="card filters"><b>${t('filters')}</b>
+  app.innerHTML = `<section class="hero2 mini" style="background-image:url('https://images.unsplash.com/photo-1613490493576-7fde63acd811?auto=format&fit=crop&w=2000&q=60'),linear-gradient(160deg,#0b3550,#07202f 70%)"><div class="wrap in"><div class="htitle"><h1>${esc(q.q || t('explore'))}</h1><div class="loc">${d.results.length} ${t('results')}</div></div>${searchBox(q, 'hero')}</div></section><div class="wrap sec"><div class="layout"><aside class="card filters"><b>${t('filters')}</b>
    <h4>${t('stars')}</h4><select id="f-stars"><option value="">—</option>${[3, 4, 5].map((n) => `<option value="${n}" ${q.stars == n ? 'selected' : ''}>${n}★ +</option>`).join('')}</select>
    <h4>${t('meal')}</h4><select id="f-meal"><option value="">${t('anyMeal')}</option>${['RO', 'BB', 'HB', 'FB'].map((x) => `<option value="${x}" ${q.meal === x ? 'selected' : ''}>${t('m' + x)}</option>`).join('')}</select>
    <h4>${t('priceRange')} (${S.cur})</h4><div class="row"><input id="f-min" type="number" placeholder="${t('min')}" value="${esc(q.minPrice || '')}"><input id="f-max" type="number" placeholder="${t('max')}" value="${esc(q.maxPrice || '')}"></div>
@@ -145,11 +146,11 @@ R(/^\/hotel\/(\d+)$/, async (app, m, q) => {
   q.checkIn ||= plus(14); q.checkOut ||= plus(16);
   const h = await api(`/hotels/${m[1]}?${new URLSearchParams({ ...q, currency: S.cur })}`);
   const im = h.images.length ? h.images : [''];
-  app.innerHTML = `<div class="wrap sec"><div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px"><div>${stars(h.stars)}<h1 style="margin:0">${esc(h.name)}</h1><div class="muted">📍 ${esc(h.address)}, ${esc(h.city)}, ${esc(h.country)}</div></div><span class="score" style="font-size:20px">${h.rating.toFixed(1)}</span></div>
-   <div class="gallery"><div ${bg(im[0])}></div><div class="col"><div ${bg(im[1] || im[0])}></div><div ${bg(im[2] || im[0])}></div></div></div>
+  app.innerHTML = `<section class="hero2 short" style="background-image:url('${esc(im[0])}'),linear-gradient(160deg,#0b3550,#07202f 70%)"><div class="ghost-word sm" aria-hidden="true">${esc(h.name.split(' ')[0])}</div><div class="wrap in"><div class="htitle"><div>${stars(h.stars)}</div><h1>${esc(h.name)}</h1><div class="loc"><span>📍 ${esc(h.address)}, ${esc(h.city)}, ${esc(h.country)}</span><span class="score">${h.rating.toFixed(1)}</span></div></div>${searchBox(q, 'hero')}</div></section>
+   <div class="wrap sec"><div class="gallery"><div ${bg(im[0])}></div><div class="col"><div ${bg(im[1] || im[0])}></div><div ${bg(im[2] || im[0])}></div></div></div>
    <div class="grid split" style="margin-top:22px"><div class="card pad"><h3>${t('about')}</h3><p>${esc(h.description)}</p><div>${h.amenities.map((a) => `<span class="tag">${AMEN[a] || ''} ${t(a)}</span>`).join('')}<span class="tag gold">${t('m' + h.meal)}</span></div></div>
     <div class="card pad small"><p><b>${t('checkInFrom')}:</b> ${esc(h.checkin)}<br><b>${t('checkOutUntil')}:</b> ${esc(h.checkout)}</p><p><b>${t('cancelPolicy')}:</b><br>${esc(h.cancelPolicy)}</p>${h.website ? `<a href="${esc(h.website)}" target="_blank" rel="noopener noreferrer">🌐 Website</a>` : ''} ${h.instagram ? `· <a href="${esc(h.instagram)}" target="_blank" rel="noopener noreferrer">Instagram</a>` : ''}</div></div>
-   <h2 style="margin-top:28px">${t('roomsRates')}</h2>${searchBox(q, true)}
+   <h2 style="margin-top:28px">${t('roomsRates')}</h2>
    ${h.offers.map((o) => `<div class="card room"><div class="img" ${bg(o.image)}></div><div class="pad"><h3>${esc(o.name)}</h3><div class="muted small">🛏 ${esc(o.bed)} · 📐 ${o.area} m² · 👥 ${t('guestsMax')}: ${o.maxGuests}</div><div style="margin-top:8px">${o.amenities.map((a) => `<span class="tag">${AMEN[a] || ''} ${t(a) === a ? a : t(a)}</span>`).join('')}</div>${o.bookable && o.available <= 3 ? `<div class="small" style="color:var(--bad);font-weight:700;margin-top:8px">${t('onlyLeft', { n: o.available })}</div>` : ''}</div>
     <div class="side"><div>${o.priceType === 'agency' ? `<span class="tag green">${t('agencyRate')}</span><br>` : ''}<span class="muted small">${h.nights} ${t(h.nights > 1 ? 'nights' : 'night')}</span><div class="price">${money(o.total, o.currency)}</div><div class="muted small">${money(o.perNight, o.currency)} ${t('perNight')}</div></div>
     ${o.bookable ? `<a class="btn gold" href="#/checkout/${o.id}?${stayQs(q)}&hotel=${h.id}">${t('book')}</a>` : `<span class="tag red">${t('soldOut')}</span>`}</div></div>`).join('')}</div>`;

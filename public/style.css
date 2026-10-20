@@ -100,7 +100,7 @@ th{background:#f0f4fb;font-size:12px;text-transform:uppercase;letter-spacing:.4p
 .ghost-word{position:absolute;top:11%;left:0;right:0;text-align:center;font-size:clamp(90px,25vw,360px);font-weight:700;letter-spacing:-.05em;line-height:1;white-space:nowrap;color:rgba(255,255,255,.15);pointer-events:none;user-select:none}
 .hero2 .in{position:relative;z-index:2;width:100%;padding-bottom:56px;display:flex;justify-content:space-between;align-items:flex-end;gap:32px;flex-wrap:wrap}
 .hero2 h1{font-size:clamp(34px,5vw,62px);font-weight:500;letter-spacing:-.02em;max-width:620px;margin:0;line-height:1.1}
-.sbox.hero{background:rgba(10,34,50,.6);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.22);border-radius:999px;margin:0;box-shadow:none;flex:1 1 600px;max-width:800px;grid-template-columns:1.6fr 1fr 1fr 1.1fr auto;align-items:center}
+.sbox.hero{background:rgba(10,34,50,.6);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.22);border-radius:999px;margin:0;box-shadow:none;flex:1 1 600px;max-width:800px;grid-template-columns:1.4fr 1fr 1fr 1.3fr auto;align-items:center}
 .sbox.hero>div{border-right:1px solid rgba(255,255,255,.16);color:#fff;padding:8px 18px}
 .sbox.hero>div:nth-child(4){border-right:0}
 .sbox.hero label{color:rgba(255,255,255,.65)}
@@ -115,9 +115,20 @@ th{background:#f0f4fb;font-size:12px;text-transform:uppercase;letter-spacing:.4p
 }
 
 /* StayGo-style header on the landing page: text links on the left, minimal selects, one orange button */
-.top.over .logo{display:none}
+.top.over.home .logo{display:none}
 .top.over .nav{margin-left:0;gap:30px}
 .top.over .nav a{padding:8px 0;border-radius:0;font-size:13px;font-weight:500;opacity:.95}
 .top.over .nav a:hover{background:none;text-decoration:underline;text-underline-offset:6px}
 .top.over select{background:transparent;border:0;font-size:12px;padding:4px 2px;opacity:.85}
 .top.over .wrap{height:72px}
+
+/* hero variants for search and hotel pages */
+.hero2.short{min-height:78vh}
+.hero2.mini{min-height:52vh}
+.ghost-word.sm{font-size:clamp(70px,15vw,230px);top:14%}
+.htitle{flex:1 1 340px;min-width:0}
+.htitle h1{font-size:clamp(30px,4.4vw,54px)}
+.htitle .loc{margin-top:10px;opacity:.9;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.hero2 .stars{font-size:18px}
+.top.over .logo{font-size:20px}
+@media(max-width:900px){.hero2.short{min-height:84vh}.hero2.mini{min-height:62vh}}
