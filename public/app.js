@@ -31,10 +31,10 @@ function renderTop() {
   const u = S.user;
   const cab = u ? { admin: ['#/admin', t('admin')], hotel: ['#/cabinet', t('cabinet')], agency: ['#/agency', t('agencyDesk')], tourist: ['#/trips', t('trips')] }[u.role] : null;
   $('#top').innerHTML = `<div class="wrap"><a class="logo" href="#/"><i>S</i>Stayly</a>
-  <nav class="nav"><a href="#/search">${t('stays')}</a>${u ? `<a href="#/trips">${t('trips')}</a>` : ''}${cab && u.role !== 'tourist' ? `<a href="${cab[0]}">${cab[1]}</a>` : ''}</nav>
+  <nav class="nav"><a href="#/search">${t('explore')}</a><a href="#/search?sort=price">${t('deals')}</a><a href="#/destinations">${t('destinations')}</a>${u ? `<a href="#/trips">${t('trips')}</a>` : ''}${cab && u.role !== 'tourist' ? `<a href="${cab[0]}">${cab[1]}</a>` : ''}</nav>
   <select id="cur" aria-label="${t('currency')}">${['USD', 'EUR', 'RUB', 'AZN', 'UZS'].map((c) => `<option ${c === S.cur ? 'selected' : ''}>${c}</option>`).join('')}</select>
   <select id="lang" aria-label="${t('language')}">${[['ru', 'RU'], ['en', 'EN'], ['uz', 'UZ'], ['az', 'AZ']].map(([k, l]) => `<option value="${k}" ${k === S.lang ? 'selected' : ''}>${l}</option>`).join('')}</select>
-  ${u ? `<a class="pill hide-sm" href="#/security" title="${t('security')}">🔒 ${esc(u.name || u.email)}</a><button class="pill" id="out">${t('logout')}</button>` : `<a class="pill" href="#/login">${t('login')}</a><a class="btn gold sm" href="#/register">${t('register')}</a>`}</div>`;
+  ${u ? `<a class="pill hide-sm" href="#/security" title="${t('security')}">🔒 ${esc(u.name || u.email)}</a><button class="pill" id="out">${t('logout')}</button>` : `<a class="pill" href="#/register">${t('register')}</a><a class="btn gold sm" style="border-radius:99px;padding:8px 20px" href="#/login">${t('login')}</a>`}</div>`;
   $('#cur').onchange = (e) => { S.cur = e.target.value; localStorage.setItem('cur', S.cur); route(); };
   $('#lang').onchange = (e) => { S.lang = e.target.value; localStorage.setItem('lang', S.lang); document.documentElement.lang = S.lang; renderTop(); route(); };
   if ($('#out')) $('#out').onclick = () => logout();
@@ -49,6 +49,7 @@ async function route() {
   const [path, qs] = hash.split('?');
   const q = Object.fromEntries(new URLSearchParams(qs || ''));
   const app = $('#app');
+  $('#top').classList.toggle('over', path === '/');
   for (const [re, fn] of routes) {
     const m = path.match(re);
     if (m) {
@@ -64,7 +65,7 @@ window.addEventListener('hashchange', route);
 
 /* ---------- search box ---------- */
 function searchBox(q = {}, compact = false) {
-  return `<form class="sbox ${compact ? 'compact' : ''}" id="sf">
+  return `<form class="sbox ${compact === 'hero' ? 'hero' : compact ? 'compact' : ''}" id="sf">
    <div><label>${t('where')}</label><input name="q" list="cities" value="${esc(q.q || '')}" placeholder="Baku, Tashkent…" autocomplete="off"><datalist id="cities">${(S.meta?.cities || []).map((c) => `<option value="${esc(c.city)}">`).join('')}</datalist></div>
    <div><label>${t('checkIn')}</label><input type="date" name="checkIn" min="${plus(0)}" value="${esc(q.checkIn || plus(14))}" required></div>
    <div><label>${t('checkOut')}</label><input type="date" name="checkOut" min="${plus(1)}" value="${esc(q.checkOut || plus(16))}" required></div>
@@ -88,7 +89,7 @@ const stayQs = (q) => new URLSearchParams(Object.fromEntries(['checkIn', 'checkO
 R(/^\/$/, async (app) => {
   const d = await api(`/hotels?checkIn=${plus(14)}&checkOut=${plus(16)}&currency=${S.cur}&sort=rating`);
   const dest = { Baku: 'photo-1597043709571-5d3f4d7a4a8c', Tashkent: 'photo-1565008576549-57569a49371d', Samarkand: 'photo-1596484552834-6a58f850e0a1', Bukhara: 'photo-1590079070277-f5a0b3b3cf0c', Gabala: 'photo-1506905925346-21bda4d32df4', Sheki: 'photo-1469474968028-56623f02e42e', Khiva: 'photo-1528127269322-539801943592' };
-  app.innerHTML = `<section class="hero"><div class="wrap"><h1>${t('heroTitle')}</h1><p>${t('heroSub')}</p>${searchBox()}</div></section>
+  app.innerHTML = `<section class="hero2" style="background-image:url('https://images.unsplash.com/photo-1613490493576-7fde63acd811?auto=format&fit=crop&w=2000&q=70'),linear-gradient(160deg,#0b3550,#07202f 70%)"><div class="ghost-word" aria-hidden="true">Stayly</div><div class="wrap in"><h1>${t('heroTitle')}</h1>${searchBox({}, 'hero')}</div></section>
   <div class="wrap">${S.user ? '' : `<div class="grid g2">
    <div class="card entry"><div class="ico">🧳</div><div><h3>${t('forTourist')}</h3><p>${t('forTouristSub')}</p><a class="btn" href="#/register?type=tourist">${t('createAccount')}</a></div></div>
    <div class="card entry"><div class="ico">🏢</div><div><h3>${t('forAgency')}</h3><p>${t('forAgencySub')}</p><a class="btn gold" href="#/register?type=agency">${t('registerAgency')}</a></div></div></div>`}
@@ -96,6 +97,11 @@ R(/^\/$/, async (app) => {
   <div class="sec"><h2>${t('popular')}</h2><div class="grid g3">${S.meta.cities.map((c) => `<a class="dest" href="#/search?q=${encodeURIComponent(c.city)}&${stayQs({ checkIn: plus(14), checkOut: plus(16) })}" style="background-image:url('https://images.unsplash.com/${dest[c.city] || 'photo-1566073771259-6a8506099945'}?auto=format&fit=crop&w=600&q=60'),${FALLBACK}"><div><b>${esc(c.city)}</b><small>${esc(c.country)} · ${c.n} ${t('properties')}</small></div></a>`).join('')}</div></div>
   ${S.user ? '' : `<div class="card pad" style="text-align:center"><b>${t('hotelOwner')}</b> — <a href="#/register?type=hotel">${t('register')} →</a></div>`}</div>`;
   bindSearch();
+});
+
+R(/^\/destinations$/, async (app) => {
+  const dest = { Baku: 'photo-1597043709571-5d3f4d7a4a8c', Tashkent: 'photo-1565008576549-57569a49371d', Samarkand: 'photo-1596484552834-6a58f850e0a1', Bukhara: 'photo-1590079070277-f5a0b3b3cf0c', Gabala: 'photo-1506905925346-21bda4d32df4', Sheki: 'photo-1469474968028-56623f02e42e', Khiva: 'photo-1528127269322-539801943592' };
+  app.innerHTML = `<div class="wrap sec"><h1>${t('destinations')}</h1><div class="grid g3">${S.meta.cities.map((c) => `<a class="dest" href="#/search?q=${encodeURIComponent(c.city)}&${stayQs({ checkIn: plus(14), checkOut: plus(16) })}" style="background-image:url('https://images.unsplash.com/${dest[c.city] || 'photo-1566073771259-6a8506099945'}?auto=format&fit=crop&w=600&q=60'),${FALLBACK}"><div><b>${esc(c.city)}</b><small>${esc(c.country)} · ${c.n} ${t('properties')}</small></div></a>`).join('')}</div></div>`;
 });
 
 /* ---------- search ---------- */
