@@ -1,7 +1,7 @@
 :root{--navy:#0b2e45;--blue:#d9650f;--blue-d:#b9540a;--gold:#f59a2b;--bg:#f4f6f8;--card:#fff;--ink:#1b2437;--mute:#66728a;--line:#e3e8f2;--ok:#0a8f5b;--bad:#d1334a;--warn:#b7791f;--r:16px;--shadow:0 6px 24px rgba(11,42,91,.08)}
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
-body{margin:0;font:15px/1.5 Inter,"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;color:var(--ink);background:var(--bg)}
+body{margin:0;display:flex;flex-direction:column;min-height:100vh;font:15px/1.5 Inter,"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;color:var(--ink);background:var(--bg)}
 a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 h1,h2,h3{line-height:1.2;margin:0 0 .5em}
 .wrap{max-width:1180px;margin:0 auto;padding:0 20px}
@@ -132,3 +132,6 @@ th{background:#f0f4fb;font-size:12px;text-transform:uppercase;letter-spacing:.4p
 .hero2 .stars{font-size:18px}
 .top.over .logo{font-size:20px}
 @media(max-width:900px){.hero2.short{min-height:84vh}.hero2.mini{min-height:62vh}}
+
+main#app{flex:1 0 auto;width:100%}
+.foot{margin-top:60px;flex-shrink:0}

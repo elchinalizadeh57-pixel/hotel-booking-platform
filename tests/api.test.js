@@ -19,7 +19,7 @@ async function api(path, { method = 'GET', body, token, headers = {} } = {}) {
 }
 const login = async (email, password) => (await api('/api/auth/login', { method: 'POST', body: { email, password } })).data.token;
 const q = `checkIn=${CI}&checkOut=${CO}&adults=2`;
-const guest = { name: 'John Doe', email: 'john@example.com' };
+const guest = { name: 'John Doe', email: 'john@example.com', phone: '+994500000000' };
 
 test('tourist sees BRUTTO, approved agency sees agency price, pending agency does not', async () => {
   const t = await api(`/api/hotels/1?${q}`);
@@ -139,4 +139,31 @@ test('EUR and RUB are supported display currencies', async () => {
   assert.equal(eur.perNight, Math.round(usd * 0.92 * 100) / 100);
   assert.equal(rub.perNight, Math.round(usd * 92 * 100) / 100);
   assert.deepEqual((await api('/api/meta')).data.currencies, ['USD', 'EUR', 'RUB', 'AZN', 'UZS']);
+});
+
+test('guest name and phone are required', async () => {
+  const tok = await login('tourist@hotel.local', 'Tourist123!');
+  const base = { roomTypeId: 1, checkIn: day(130), checkOut: day(131), payMethod: 'online' };
+  assert.equal((await api('/api/bookings', { method: 'POST', token: tok, body: { ...base, guest: { name: 'A B', email: 'a@b.co' } } })).status, 400);
+  assert.equal((await api('/api/bookings', { method: 'POST', token: tok, body: { ...base, guest: { name: 'A B', email: 'a@b.co', phone: '12' } } })).status, 400);
+  assert.equal((await api('/api/bookings', { method: 'POST', token: tok, body: { ...base, guest: { name: ' ', email: 'a@b.co', phone: '+994501234567' } } })).status, 400);
+});
+
+test('payment options follow the hotel policy; pay-at-property confirms without payment', async () => {
+  const tok = await login('tourist@hotel.local', 'Tourist123!');
+  const opts = async (id) => (await api(`/api/hotels/${id}?${q}`)).data.payOptions;
+  assert.deepEqual(await opts(1), ['online', 'property']);
+  assert.deepEqual(await opts(3), ['online']);
+  assert.deepEqual(await opts(5), ['property']);
+  const mk = (roomTypeId, payMethod, d) => api('/api/bookings', { method: 'POST', token: tok, body: { roomTypeId, checkIn: day(d), checkOut: day(d + 1), guest, payMethod } });
+  assert.equal((await mk(7, 'property', 140)).status, 400);   // hotel 3 (rooms 7-9) is online only
+  assert.equal((await mk(13, 'online', 141)).status, 400);    // hotel 5 (rooms 13-15) is property only
+  const ok = await mk(13, 'property', 142);
+  assert.equal(ok.status, 201); assert.equal(ok.data.status, 'confirmed'); assert.equal(ok.data.payMethod, 'property');
+  assert.equal(ctx.db.prepare('SELECT COUNT(*) n FROM payments WHERE booking_id=?').get(ok.data.id).n, 0);
+  const c = await api(`/api/bookings/${ok.data.id}/cancel`, { method: 'POST', token: tok });
+  assert.equal(c.data.status, 'cancelled'); // nothing was paid, so nothing to refund
+  const hot = await login('hotel@hotel.local', 'Hotel123!');
+  assert.equal((await api('/api/hotel/me', { method: 'PATCH', token: hot, body: { paymentPolicy: 'property' } })).status, 200);
+  assert.deepEqual(await opts(1), ['property']);
 });

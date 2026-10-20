@@ -93,6 +93,7 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
     id: h.id, name: h.name, country: h.country, city: h.city, address: h.address, lat: h.lat, lng: h.lng, stars: h.stars,
     description: h.description, images: J(h.images), amenities: J(h.amenities), meal: h.meal, checkin: h.checkin, checkout: h.checkout,
     cancelPolicy: h.cancel_policy, website: h.website, instagram: h.instagram, rating: h.rating,
+    payOptions: h.payment_policy === 'online' ? ['online'] : h.payment_policy === 'property' ? ['property'] : ['online', 'property'],
   });
   function viewerRole(user) {
     if (user?.role === 'agency' && user.agency_id) {
@@ -330,11 +331,15 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
     const rooms = Math.max(1, Math.min(9, parseInt(b.rooms) || 1)), adults = parseInt(b.adults) || 1, children = parseInt(b.children) || 0;
     if (rt.max_guests * rooms < adults + children) throw fail(400, 'Too many guests for this room');
     const g = b.guest || {};
-    if (!g.name || !/^[^@\s]+@[^@\s]+$/.test(g.email || '')) throw fail(400, 'Guest name and valid email are required');
+    if (!String(g.name || '').trim() || !/^[^@\s]+@[^@\s]+$/.test(g.email || '')) throw fail(400, 'Guest name and valid email are required');
+    if (String(g.phone || '').replace(/\D/g, '').length < 7) throw fail(400, 'A valid phone number is required');
     const cur = P.CURRENCIES.includes(b.currency) ? b.currency : 'USD';
     const v = viewerRole(req.user);
-    const payMethod = b.payMethod === 'contract' ? 'contract' : 'online';
+    const payMethod = ['contract', 'property'].includes(b.payMethod) ? b.payMethod : 'online';
     if (payMethod === 'contract' && v.role !== 'agency') throw fail(403, 'Contract payment is available for approved agencies only');
+    const policy = h.payment_policy || 'both';
+    if (payMethod === 'online' && policy === 'property') throw fail(400, 'This hotel accepts payment at the property only');
+    if (payMethod === 'property' && policy === 'online') throw fail(400, 'This hotel requires online payment');
 
     const created = tx(() => {
       const offer = roomOffer(rt, dates, rooms);
@@ -350,20 +355,20 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
         if (r.changes !== 1) throw fail(409, 'Not enough rooms available for the selected dates');
       }
       const snapshot = { ...quote.snapshot, currency: cur, rate: P.RATES[cur], rateSource: 'platform-fixed', priceModel: h.price_model };
-      const status = payMethod === 'contract' ? 'pending' : 'on_hold';
+      const status = payMethod === 'online' ? 'on_hold' : 'pending';
       const id = Number(run(`INSERT INTO bookings(ref,user_id,hotel_id,room_type_id,check_in,check_out,rooms,adults,children,guest_name,guest_email,guest_phone,
         channel,pay_method,status,total_usd,currency,total_cur,snapshot,hold_expires,idem_key) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         refGen(), req.user.id, h.id, rt.id, b.checkIn, b.checkOut, rooms, adults, children, g.name, g.email, g.phone || '',
         v.role === 'agency' ? 'agency' : 'tourist', payMethod, status, quote.total, cur, P.convert(quote.total, cur), JSON.stringify(snapshot),
         status === 'on_hold' ? new Date(Date.now() + HOLD_MIN * 60000).toISOString() : null, idem).lastInsertRowid);
       const row = get('SELECT * FROM bookings WHERE id=?', id);
-      run('INSERT INTO booking_history(booking_id,status,note) VALUES(?,?,?)', id, status, payMethod === 'contract' ? 'Settled on contract' : 'Inventory held');
+      run('INSERT INTO booking_history(booking_id,status,note) VALUES(?,?,?)', id, status, payMethod === 'contract' ? 'Settled on contract' : payMethod === 'property' ? 'Pay at the property' : 'Inventory held');
       if (payMethod === 'contract') run('UPDATE agencies SET debt=debt+? WHERE id=?', quote.total, v.agencyId);
       audit(req.user.id, 'booking.create', { ref: row.ref });
       return row;
     });
     emit('booking.created', created);
-    if (created.pay_method === 'contract') await finalizeBooking(created, 'Settled on contract');
+    if (created.pay_method !== 'online') await finalizeBooking(created, created.pay_method === 'contract' ? 'Settled on contract' : 'Pay at the property');
     res.status(201).json(serializeBooking(get('SELECT * FROM bookings WHERE id=?', created.id), 'user'));
   }));
   function bookingSummary(b) {
@@ -468,7 +473,7 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
     const h = myHotel(req);
     const claim = get('SELECT * FROM hotel_claims WHERE user_id=? ORDER BY id DESC', req.user.id);
     res.json({
-      hotel: { ...publicHotel(h), status: h.status, priceModel: h.price_model, source: h.source }, claim,
+      hotel: { ...publicHotel(h), paymentPolicy: h.payment_policy || 'both', status: h.status, priceModel: h.price_model, source: h.source }, claim,
       rooms: all('SELECT * FROM room_types WHERE hotel_id=?', h.id).map((r) => ({ id: r.id, name: r.name, maxGuests: r.max_guests, basePrice: r.base_price, count: r.count })),
       bookings: all('SELECT * FROM bookings WHERE hotel_id=? ORDER BY id DESC LIMIT 100', h.id).map((b) => serializeBooking(b, 'hotel')),
     });
@@ -476,8 +481,8 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
   app.get('/api/hotel/status', need('hotel'), (req, res) => res.json({ linked: !!req.user.hotel_id, claim: get('SELECT * FROM hotel_claims WHERE user_id=? ORDER BY id DESC', req.user.id) || null }));
   app.patch('/api/hotel/me', need('hotel'), wrap((req, res) => {
     const h = myHotel(req), b = req.body || {};
-    run('UPDATE hotels SET description=COALESCE(?,description), website=COALESCE(?,website), instagram=COALESCE(?,instagram), cancel_policy=COALESCE(?,cancel_policy) WHERE id=?',
-      b.description ?? null, b.website ?? null, b.instagram ?? null, b.cancelPolicy ?? null, h.id);
+    run('UPDATE hotels SET description=COALESCE(?,description), website=COALESCE(?,website), instagram=COALESCE(?,instagram), cancel_policy=COALESCE(?,cancel_policy), payment_policy=COALESCE(?,payment_policy) WHERE id=?',
+      b.description ?? null, b.website ?? null, b.instagram ?? null, b.cancelPolicy ?? null, ['online', 'property', 'both'].includes(b.paymentPolicy) ? b.paymentPolicy : null, h.id);
     audit(req.user.id, 'hotel.update', { id: h.id });
     res.json({ ok: true });
   }));
@@ -544,10 +549,10 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
     res.status(201).json({ id });
   }));
   app.patch('/api/admin/hotels/:id', admin, wrap((req, res) => {
-    const { status, priceModel } = req.body || {};
+    const { status, priceModel, paymentPolicy } = req.body || {};
     if (status && !['approved', 'hidden', 'pending'].includes(status)) throw fail(400, 'Invalid status');
     if (priceModel && !['netto', 'brutto'].includes(priceModel)) throw fail(400, 'Invalid model');
-    run('UPDATE hotels SET status=COALESCE(?,status), price_model=COALESCE(?,price_model) WHERE id=?', status ?? null, priceModel ?? null, Number(req.params.id));
+    run('UPDATE hotels SET status=COALESCE(?,status), price_model=COALESCE(?,price_model), payment_policy=COALESCE(?,payment_policy) WHERE id=?', status ?? null, priceModel ?? null, ['online', 'property', 'both'].includes(paymentPolicy) ? paymentPolicy : null, Number(req.params.id));
     audit(req.user.id, 'hotel.patch', { id: req.params.id, status, priceModel });
     res.json({ ok: true });
   }));

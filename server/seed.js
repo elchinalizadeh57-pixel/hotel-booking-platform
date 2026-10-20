@@ -35,6 +35,7 @@ function seed(db) {
     const base = h[6] * 22 + 15 + (i % 3) * 6;
     ROOMS.forEach((r, j) => insR.run(id, r[0], r[1], r[2], r[3], JSON.stringify(['wifi', 'tv', 'ac']), IMG[['room1', 'bed', 'suite'][j]], Math.round(base * r[4]), 4 + j));
   });
+  db.exec("UPDATE hotels SET payment_policy='online' WHERE id=3; UPDATE hotels SET payment_policy='property' WHERE id=5");
   const ag = Number(db.prepare("INSERT INTO agencies(name,voen,country,contact,status,credit_limit) VALUES('Silk Tours LLC','1234567890','Azerbaijan','+994 50 000 00 00','approved',5000)").run().lastInsertRowid);
   const ag2 = Number(db.prepare("INSERT INTO agencies(name,voen,country,contact,status) VALUES('New Horizons Travel','9876543210','Uzbekistan','+998 90 000 00 00','pending')").run().lastInsertRowid);
   insU.run('admin@hotel.local', 'Platform Admin', hashPassword('Admin123!'), 'admin', null, null);

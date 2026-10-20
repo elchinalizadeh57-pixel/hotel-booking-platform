@@ -1,5 +1,6 @@
 const I18N = {
   en: {
+    payProperty:'Pay at the hotel',payPropertyHint:'No payment now — you pay at check-in, according to the hotel terms.',payTerms:'Payment terms',polBoth:'Online payment or pay at the hotel',polOnline:'Online payment only',polProperty:'Pay at the hotel only',
     explore: 'Explore Hotels', deals: 'Deals & Offers', destinations: 'Destinations',
     forgot: 'Forgot password?', forgotHelp: 'Enter your account e-mail and we will send you a reset link.', sendLink: 'Send reset link', resetSent: 'If an account with this e-mail exists, a reset link has been sent. It is valid for 1 hour.', newPassword: 'Set a new password', repeatPassword: 'Repeat password', mismatch: 'Passwords do not match', showPassword: 'Show / hide password',
     security: 'Security', mfa: 'Two-factor authentication', mfaCode: 'Authentication code', mfaSetup: 'Set up 2FA', mfaEnable: 'Enable', mfaDisable: 'Disable', mfaHelp: 'Add this key to an authenticator app (Google Authenticator, Authy…), then enter the 6-digit code.', integrations: 'Integrations', content: 'Content', p_about: 'About', p_terms: 'Terms', p_privacy: 'Privacy',
@@ -27,6 +28,7 @@ const I18N = {
     notifications: 'Notifications', grossUsd: 'Gross sales (USD)', hotelPayable: 'Payable to hotels', revenue: 'Platform revenue', funnel: 'Conversion funnel', searches: 'Searches', views: 'Hotel views', checkouts: 'Checkout starts',
   },
   az: {
+    payProperty:'Otelin özündə ödə',payPropertyHint:'İndi ödəniş yoxdur — otelin şərtlərinə uyğun olaraq girişdə ödəyirsiniz.',payTerms:'Ödəniş şərtləri',polBoth:'Onlayn ödəniş və ya otelin özündə',polOnline:'Yalnız onlayn ödəniş',polProperty:'Yalnız otelin özündə ödəniş',
     explore: 'Otellər', deals: 'Endirim və təkliflər', destinations: 'İstiqamətlər',
     forgot: 'Parolu unutmusunuz?', forgotHelp: 'Hesabın e-poçtunu daxil edin, bərpa linki göndərəcəyik.', sendLink: 'Bərpa linki göndər', resetSent: 'Bu e-poçtla hesab varsa, bərpa linki göndərildi. Link 1 saat etibarlıdır.', newPassword: 'Yeni parol təyin edin', repeatPassword: 'Parolu təkrarlayın', mismatch: 'Parollar üst-üstə düşmür', showPassword: 'Parolu göstər / gizlət',
     security: 'Təhlükəsizlik', mfa: 'İkifaktorlu autentifikasiya', mfaCode: 'Təsdiq kodu', mfaSetup: '2FA qur', mfaEnable: 'Aktiv et', mfaDisable: 'Deaktiv et', mfaHelp: 'Bu açarı autentifikator tətbiqinə əlavə edin, sonra 6 rəqəmli kodu daxil edin.', integrations: 'İnteqrasiyalar', content: 'Məzmun', p_about: 'Haqqımızda', p_terms: 'Şərtlər', p_privacy: 'Məxfilik',
@@ -54,6 +56,7 @@ const I18N = {
     notifications: 'Bildirişlər', grossUsd: 'Ümumi satış (USD)', hotelPayable: 'Otellərə ödəniləcək', revenue: 'Platforma gəliri', funnel: 'Konversiya', searches: 'Axtarışlar', views: 'Otel baxışları', checkouts: 'Bron başlanğıcı',
   },
   ru: {
+    payProperty:'Оплата в отеле',payPropertyHint:'Сейчас платить не нужно — оплата при заезде по условиям отеля.',payTerms:'Условия оплаты',polBoth:'Онлайн или в отеле',polOnline:'Только онлайн',polProperty:'Только в отеле',
     explore: 'Отели', deals: 'Акции и предложения', destinations: 'Направления',
     forgot: 'Забыли пароль?', forgotHelp: 'Введите e-mail аккаунта, и мы отправим ссылку для сброса.', sendLink: 'Отправить ссылку', resetSent: 'Если аккаунт с таким e-mail существует, ссылка отправлена. Она действует 1 час.', newPassword: 'Новый пароль', repeatPassword: 'Повторите пароль', mismatch: 'Пароли не совпадают', showPassword: 'Показать / скрыть пароль',
     security: 'Безопасность', mfa: 'Двухфакторная аутентификация', mfaCode: 'Код подтверждения', mfaSetup: 'Настроить 2FA', mfaEnable: 'Включить', mfaDisable: 'Отключить', mfaHelp: 'Добавьте ключ в приложение-аутентификатор и введите 6-значный код.', integrations: 'Интеграции', content: 'Контент', p_about: 'О нас', p_terms: 'Условия', p_privacy: 'Конфиденциальность',
@@ -81,6 +84,7 @@ const I18N = {
     notifications: 'Уведомления', grossUsd: 'Продажи (USD)', hotelPayable: 'К выплате отелям', revenue: 'Доход платформы', funnel: 'Воронка', searches: 'Поиски', views: 'Просмотры отелей', checkouts: 'Начало брони',
   },
   uz: {
+    payProperty:"Mehmonxonada to'lash",payPropertyHint:"Hozir to'lov yo'q — mehmonxona shartlariga ko'ra kelganda to'laysiz.",payTerms:"To'lov shartlari",polBoth:"Onlayn yoki mehmonxonada",polOnline:"Faqat onlayn",polProperty:"Faqat mehmonxonada",
     explore: 'Mehmonxonalar', deals: 'Chegirma va takliflar', destinations: "Yo'nalishlar",
     forgot: 'Parolni unutdingizmi?', forgotHelp: "Hisob e-pochtasini kiriting, tiklash havolasini yuboramiz.", sendLink: 'Havola yuborish', resetSent: "Bu e-pochta bilan hisob mavjud bo'lsa, havola yuborildi. U 1 soat amal qiladi.", newPassword: 'Yangi parol', repeatPassword: 'Parolni takrorlang', mismatch: 'Parollar mos kelmadi', showPassword: "Parolni ko'rsatish / yashirish",
     security: 'Xavfsizlik', mfa: 'Ikki bosqichli autentifikatsiya', mfaCode: 'Tasdiqlash kodi', mfaSetup: '2FA sozlash', mfaEnable: 'Yoqish', mfaDisable: "O'chirish", mfaHelp: "Kalitni autentifikator ilovasiga qo'shing va 6 xonali kodni kiriting.", integrations: 'Integratsiyalar', content: 'Kontent', p_about: 'Biz haqimizda', p_terms: 'Shartlar', p_privacy: 'Maxfiylik',

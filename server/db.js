@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS analytics_events(
   const cols = (t) => db.prepare(`PRAGMA table_info(${t})`).all().map((c) => c.name);
   const add = (t, c, def) => { if (!cols(t).includes(c)) db.exec(`ALTER TABLE ${t} ADD COLUMN ${c} ${def}`); };
   add('users', 'pw_changed_at', 'INTEGER DEFAULT 0'); add('users', 'mfa_secret', 'TEXT'); add('users', 'mfa_enabled', 'INTEGER DEFAULT 0');
-  add('hotels', 'supplier_id', 'INTEGER'); add('hotels', 'external_id', 'TEXT'); add('room_types', 'external_id', 'TEXT');
+  add('hotels', 'payment_policy', "TEXT DEFAULT 'both'"); add('hotels', 'supplier_id', 'INTEGER'); add('hotels', 'external_id', 'TEXT'); add('room_types', 'external_id', 'TEXT');
   add('bookings', 'external_ref', 'TEXT'); add('bookings', 'provider_ref', 'TEXT');
   return db;
 }

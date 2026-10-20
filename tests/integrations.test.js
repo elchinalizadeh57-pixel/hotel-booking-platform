@@ -43,7 +43,7 @@ async function api(path, { method = 'GET', body, token, headers = {}, raw } = {}
   return { status: r.status, data };
 }
 const login = async (email, password, code) => (await api('/api/auth/login', { method: 'POST', body: { email, password, code } })).data.token;
-const guest = { name: 'Ann Lee', email: 'ann@example.com' };
+const guest = { name: 'Ann Lee', email: 'ann@example.com', phone: '+998900000000' };
 
 test('TOTP matches RFC 6238 test vector and rejects wrong codes', () => {
   const secret = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ'; // "12345678901234567890"
@@ -141,7 +141,7 @@ test('supplier rejection releases inventory and debt, booking fails', async () =
   const tok = await login('agency@hotel.local', 'Agency123!');
   const rt = ctx.db.prepare("SELECT id FROM room_types WHERE external_id='IST-1-B'").get().id;
   const debtBefore = ctx.db.prepare('SELECT debt FROM agencies WHERE id=1').get().debt;
-  const r = await api('/api/bookings', { method: 'POST', token: tok, body: { roomTypeId: rt, checkIn: day(50), checkOut: day(51), guest: { name: 'FAIL Test', email: 'f@x.com' }, payMethod: 'contract' } });
+  const r = await api('/api/bookings', { method: 'POST', token: tok, body: { roomTypeId: rt, checkIn: day(50), checkOut: day(51), guest: { name: 'FAIL Test', email: 'f@x.com', phone: '+998901111111' }, payMethod: 'contract' } });
   assert.equal(r.status, 502);
   assert.equal(ctx.db.prepare('SELECT debt FROM agencies WHERE id=1').get().debt, debtBefore);
   assert.equal(ctx.db.prepare('SELECT available FROM inventory WHERE room_type_id=? AND date=?').get(rt, day(50)).available, 2);
