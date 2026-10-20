@@ -10,7 +10,7 @@ h1,h2,h3{line-height:1.2;margin:0 0 .5em}
 .logo{font-weight:800;font-size:22px;letter-spacing:-.5px;color:#fff;display:flex;align-items:center;gap:8px}
 .logo i{background:var(--gold);color:var(--navy);border-radius:9px;width:30px;height:30px;display:grid;place-items:center;font-style:normal;font-size:18px}
 .nav{display:flex;gap:4px;margin-left:12px;flex:1}
-.nav a,.pill{color:#fff;padding:8px 14px;border-radius:99px;font-weight:600;font-size:14px;background:none;border:0;cursor:pointer}
+.nav a,.pill{white-space:nowrap;color:#fff;padding:8px 14px;border-radius:99px;font-weight:600;font-size:14px;background:none;border:0;cursor:pointer}
 .nav a:hover,.pill:hover{background:rgba(255,255,255,.14);text-decoration:none}
 .top select{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 8px;font:inherit}
 .top select option{color:#111}

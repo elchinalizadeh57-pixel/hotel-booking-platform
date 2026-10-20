@@ -22,7 +22,8 @@ async function api(path, opt = {}) {
 function toast(m) { const e = $('#toast'); e.textContent = m; e.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove('on'), 2600); }
 const track = (type, ref) => fetch('/api/track', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, ref }) }).catch(() => {});
 
-function logout(silent) { S.token = null; S.user = null; localStorage.removeItem('tok'); renderTop(); if (!silent) toast('👋'); location.hash = '#/'; }
+const go = (h) => { if (location.hash === h || (h === '#/' && !location.hash)) route(); else location.hash = h; };
+function logout(silent) { S.token = null; S.user = null; localStorage.removeItem('tok'); renderTop(); if (!silent) toast('👋'); go('#/'); }
 async function loadUser() { if (!S.token) return; try { S.user = await api('/me', { quiet: true }); } catch { S.token = null; localStorage.removeItem('tok'); } }
 
 /* ---------- layout ---------- */
@@ -88,12 +89,12 @@ R(/^\/$/, async (app) => {
   const d = await api(`/hotels?checkIn=${plus(14)}&checkOut=${plus(16)}&currency=${S.cur}&sort=rating`);
   const dest = { Baku: 'photo-1597043709571-5d3f4d7a4a8c', Tashkent: 'photo-1565008576549-57569a49371d', Samarkand: 'photo-1596484552834-6a58f850e0a1', Bukhara: 'photo-1590079070277-f5a0b3b3cf0c', Gabala: 'photo-1506905925346-21bda4d32df4', Sheki: 'photo-1469474968028-56623f02e42e', Khiva: 'photo-1528127269322-539801943592' };
   app.innerHTML = `<section class="hero"><div class="wrap"><h1>${t('heroTitle')}</h1><p>${t('heroSub')}</p>${searchBox()}</div></section>
-  <div class="wrap"><div class="grid g2">
+  <div class="wrap">${S.user ? '' : `<div class="grid g2">
    <div class="card entry"><div class="ico">🧳</div><div><h3>${t('forTourist')}</h3><p>${t('forTouristSub')}</p><a class="btn" href="#/register?type=tourist">${t('createAccount')}</a></div></div>
-   <div class="card entry"><div class="ico">🏢</div><div><h3>${t('forAgency')}</h3><p>${t('forAgencySub')}</p><a class="btn gold" href="#/register?type=agency">${t('registerAgency')}</a></div></div></div>
+   <div class="card entry"><div class="ico">🏢</div><div><h3>${t('forAgency')}</h3><p>${t('forAgencySub')}</p><a class="btn gold" href="#/register?type=agency">${t('registerAgency')}</a></div></div></div>`}
   <div class="sec"><h2>${t('featured')}</h2><div class="grid g3">${d.results.slice(0, 6).map((h) => `<a class="card" href="#/hotel/${h.id}?${stayQs({ checkIn: plus(14), checkOut: plus(16) })}" style="color:inherit;text-decoration:none"><div style="height:170px;background-size:cover;background-position:center;background-image:url('${esc(h.image)}'),${FALLBACK}"></div><div class="pad"><div>${stars(h.stars)}</div><h3>${esc(h.name)}</h3><div class="muted small">${esc(h.city)}, ${esc(h.country)}</div><div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center"><span class="score">${h.rating.toFixed(1)}</span><span><span class="muted small">${t('from')}</span> <b>${money(h.fromPrice, h.currency)}</b></span></div></div></a>`).join('')}</div></div>
   <div class="sec"><h2>${t('popular')}</h2><div class="grid g3">${S.meta.cities.map((c) => `<a class="dest" href="#/search?q=${encodeURIComponent(c.city)}&${stayQs({ checkIn: plus(14), checkOut: plus(16) })}" style="background-image:url('https://images.unsplash.com/${dest[c.city] || 'photo-1566073771259-6a8506099945'}?auto=format&fit=crop&w=600&q=60'),${FALLBACK}"><div><b>${esc(c.city)}</b><small>${esc(c.country)} · ${c.n} ${t('properties')}</small></div></a>`).join('')}</div></div>
-  <div class="card pad" style="text-align:center"><b>${t('hotelOwner')}</b> — <a href="#/register?type=hotel">${t('register')} →</a></div></div>`;
+  ${S.user ? '' : `<div class="card pad" style="text-align:center"><b>${t('hotelOwner')}</b> — <a href="#/register?type=hotel">${t('register')} →</a></div>`}</div>`;
   bindSearch();
 });
 
@@ -225,7 +226,7 @@ R(/^\/login$/, async (app) => {
 function afterAuth(d) {
   S.token = d.token; S.user = d.user; localStorage.setItem('tok', d.token); renderTop();
   const back = sessionStorage.getItem('back'); sessionStorage.removeItem('back');
-  location.hash = back || { admin: '#/admin', hotel: '#/cabinet', agency: '#/agency', tourist: '#/' }[d.user.role];
+  go(back || { admin: '#/admin', hotel: '#/cabinet', agency: '#/agency', tourist: '#/' }[d.user.role]);
 }
 R(/^\/register$/, async (app, m, q) => {
   let type = ['tourist', 'agency', 'hotel'].includes(q.type) ? q.type : 'tourist';
