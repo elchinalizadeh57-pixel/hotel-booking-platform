@@ -209,7 +209,7 @@ R(/^\/trips$/, async (app) => {
 
 /* ---------- auth ---------- */
 R(/^\/login$/, async (app) => {
-  app.innerHTML = `<div class="wrap"><div class="auth card pad"><h2>${t('signInTitle')}</h2><form id="lf"><div class="field"><label>${t('email')}</label><input type="email" name="email" required autocomplete="username"></div><div class="field"><label>${t('password')}</label><input type="password" name="password" required autocomplete="current-password"></div><div id="mfa"></div><div id="err"></div><button class="btn" style="width:100%">${t('login')}</button></form>
+  app.innerHTML = `<div class="wrap"><div class="auth card pad"><h2>${t('signInTitle')}</h2><form id="lf"><div class="field"><label>${t('email')}</label><input type="email" name="email" required autocomplete="username"></div><div class="field"><label>${t('password')}</label><input type="password" name="password" required autocomplete="current-password"></div><div id="mfa"></div><p class="small" style="text-align:right;margin:-4px 0 10px"><a href="#/forgot">${t('forgot')}</a></p><div id="err"></div><button class="btn" style="width:100%">${t('login')}</button></form>
    <p class="small muted">${t('noAccount')} <a href="#/register">${t('register')}</a></p>
    <details class="small"><summary>${t('demo')}</summary><p>admin@hotel.local / Admin123!<br>tourist@hotel.local / Tourist123!<br>agency@hotel.local / Agency123! (${t('agency')} ✓)<br>agency2@hotel.local / Agency123! (pending)<br>hotel@hotel.local / Hotel123!</p></details></div></div>`;
   $('#lf').onsubmit = async (e) => {
@@ -370,6 +370,43 @@ R(/^\/security$/, async (app) => {
   };
   draw();
 });
+
+R(/^\/forgot$/, async (app) => {
+  app.innerHTML = `<div class="wrap"><div class="auth card pad"><h2>${t('forgot')}</h2><p class="muted small">${t('forgotHelp')}</p><form id="ff"><div class="field"><label>${t('email')}</label><input type="email" name="email" required autocomplete="username"></div><div id="err"></div><button class="btn" style="width:100%">${t('sendLink')}</button></form><p class="small"><a href="#/login">← ${t('login')}</a></p></div></div>`;
+  $('#ff').onsubmit = async (e) => {
+    e.preventDefault();
+    try { await api('/auth/forgot', { method: 'POST', body: { email: e.target.email.value }, quiet: true }); $('#ff').innerHTML = `<div class="notice">${t('resetSent')}</div>`; }
+    catch (er) { $('#err').innerHTML = `<div class="err">${esc(er.message)}</div>`; }
+  };
+});
+R(/^\/reset$/, async (app, m, q) => {
+  app.innerHTML = `<div class="wrap"><div class="auth card pad"><h2>${t('newPassword')}</h2><form id="rf2"><div class="field"><label>${t('password')} (8+)</label><input type="password" name="password" minlength="8" required autocomplete="new-password"></div><div class="field"><label>${t('repeatPassword')}</label><input type="password" name="again" minlength="8" required autocomplete="new-password"></div><div id="err"></div><button class="btn" style="width:100%">${t('save')}</button></form></div></div>`;
+  enhancePasswords();
+  $('#rf2').onsubmit = async (e) => {
+    e.preventDefault();
+    if (e.target.password.value !== e.target.again.value) { $('#err').innerHTML = `<div class="err">${t('mismatch')}</div>`; return; }
+    try { await api('/auth/reset', { method: 'POST', body: { token: q.token, password: e.target.password.value }, quiet: true }); toast(t('saved')); location.hash = '#/login'; }
+    catch (er) { $('#err').innerHTML = `<div class="err">${esc(er.message)}</div>`; }
+  };
+});
+
+/* show/hide (eye) button on every password field */
+function enhancePasswords() {
+  document.querySelectorAll('input[type=password]:not([data-eye])').forEach((inp) => {
+    inp.dataset.eye = '1';
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:relative';
+    inp.parentNode.insertBefore(wrap, inp);
+    wrap.appendChild(inp);
+    inp.style.paddingRight = '44px';
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = '👁'; b.title = t('showPassword'); b.setAttribute('aria-label', t('showPassword'));
+    b.style.cssText = 'position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:none;cursor:pointer;font-size:18px;padding:4px 8px;opacity:.7';
+    b.onclick = () => { const show = inp.type === 'password'; inp.type = show ? 'text' : 'password'; b.textContent = show ? '🙈' : '👁'; b.style.opacity = show ? 1 : .7; };
+    wrap.appendChild(b);
+  });
+}
+new MutationObserver(() => enhancePasswords()).observe(document.getElementById('app'), { childList: true, subtree: true });
 
 /* ---------- boot ---------- */
 (async () => {

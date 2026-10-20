@@ -27,7 +27,8 @@ function loadSecret(dbFile) {
 
 const b64 = (x) => Buffer.from(x).toString('base64url');
 function sign(payload, secret, ttlSec = 7 * 24 * 3600) {
-  const body = b64(JSON.stringify({ ...payload, exp: Math.floor(Date.now() / 1000) + ttlSec }));
+  const now = Math.floor(Date.now() / 1000);
+  const body = b64(JSON.stringify({ ...payload, iat: now, exp: now + ttlSec }));
   return `${body}.${crypto.createHmac('sha256', secret).update(body).digest('base64url')}`;
 }
 function verify(token, secret) {

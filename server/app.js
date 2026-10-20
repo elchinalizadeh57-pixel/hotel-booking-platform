@@ -141,6 +141,7 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
     const t = (req.get('authorization') || '').replace(/^Bearer /, '');
     const p = t && A.verify(t, secret);
     req.user = p ? get('SELECT * FROM users WHERE id=?', p.uid) : null;
+    if (req.user && (req.user.pw_changed_at || 0) > p.iat) req.user = null; // password changed: older sessions are invalid
     next();
   });
   const need = (...roles) => (req, res, next) => {
@@ -192,6 +193,38 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
       if (!TOTP.verify(u.mfa_secret, req.body.code)) { attempts.set(key, [...a, now]); throw fail(401, 'Invalid authentication code'); }
     }
     res.json({ token: A.sign({ uid: u.id }, secret), user: userOut(u) });
+  }));
+  // --- password reset by e-mail (token is random, only its hash is stored, single use, 1 hour)
+  const resetAttempts = new Map();
+  app.post('/api/auth/forgot', wrap((req, res) => {
+    const now = Date.now(), key = req.ip;
+    const a = (resetAttempts.get(key) || []).filter((x) => now - x < 3600000);
+    if (a.length >= 5) throw fail(429, 'Too many requests, try again later');
+    resetAttempts.set(key, [...a, now]);
+    const u = get('SELECT * FROM users WHERE email=?', String(req.body?.email || '').toLowerCase());
+    if (u) {
+      const token = require('crypto').randomBytes(32).toString('base64url');
+      const hash = require('crypto').createHash('sha256').update(token).digest('hex');
+      run('INSERT INTO password_resets(token_hash,user_id,expires_at) VALUES(?,?,?)', hash, u.id, new Date(now + 3600000).toISOString());
+      const link = `${process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`}/#/reset?token=${token}`;
+      const sent = outbox.enqueue('email', 'email:reset:' + hash, { to: u.email, subject: 'Stayly: password reset', text: `Hello ${u.name || ''},\n\nReset your password (valid for 1 hour):\n${link}\n\nIf you did not request this, ignore this message.` });
+      if (!sent) console.log(`[password reset] SMTP is not configured; reset link for ${u.email}: ${link}`);
+      audit(u.id, 'password.reset.request', {});
+    }
+    res.json({ ok: true }); // same answer whether or not the account exists
+  }));
+  app.post('/api/auth/reset', wrap((req, res) => {
+    const { token, password } = req.body || {};
+    if (!password || password.length < 8) throw fail(400, 'Password must be at least 8 characters');
+    const hash = require('crypto').createHash('sha256').update(String(token || '')).digest('hex');
+    const r = get('SELECT * FROM password_resets WHERE token_hash=?', hash);
+    if (!r || r.used || r.expires_at < new Date().toISOString()) throw fail(400, 'This reset link is invalid or has expired');
+    tx(() => {
+      run('UPDATE users SET pass=?, pw_changed_at=? WHERE id=?', A.hashPassword(password), Math.floor(Date.now() / 1000), r.user_id);
+      run('UPDATE password_resets SET used=1 WHERE user_id=?', r.user_id);
+      audit(r.user_id, 'password.reset.done', {});
+    });
+    res.json({ ok: true });
   }));
   app.post('/api/auth/mfa/setup', need(), (req, res) => {
     const sec = TOTP.newSecret();

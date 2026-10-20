@@ -1,5 +1,6 @@
 const I18N = {
   en: {
+    forgot: 'Forgot password?', forgotHelp: 'Enter your account e-mail and we will send you a reset link.', sendLink: 'Send reset link', resetSent: 'If an account with this e-mail exists, a reset link has been sent. It is valid for 1 hour.', newPassword: 'Set a new password', repeatPassword: 'Repeat password', mismatch: 'Passwords do not match', showPassword: 'Show / hide password',
     security: 'Security', mfa: 'Two-factor authentication', mfaCode: 'Authentication code', mfaSetup: 'Set up 2FA', mfaEnable: 'Enable', mfaDisable: 'Disable', mfaHelp: 'Add this key to an authenticator app (Google Authenticator, Authy…), then enter the 6-digit code.', integrations: 'Integrations', content: 'Content', p_about: 'About', p_terms: 'Terms', p_privacy: 'Privacy',
     home: 'Home', stays: 'Stays', trips: 'My trips', login: 'Sign in', register: 'Register', logout: 'Sign out', admin: 'Admin', cabinet: 'Hotel cabinet', agencyDesk: 'Agency desk',
     heroTitle: 'Find your next stay', heroSub: 'Hotels in Azerbaijan and Uzbekistan — best rates, instant confirmation.',
@@ -25,6 +26,7 @@ const I18N = {
     notifications: 'Notifications', grossUsd: 'Gross sales (USD)', hotelPayable: 'Payable to hotels', revenue: 'Platform revenue', funnel: 'Conversion funnel', searches: 'Searches', views: 'Hotel views', checkouts: 'Checkout starts',
   },
   az: {
+    forgot: 'Parolu unutmusunuz?', forgotHelp: 'Hesabın e-poçtunu daxil edin, bərpa linki göndərəcəyik.', sendLink: 'Bərpa linki göndər', resetSent: 'Bu e-poçtla hesab varsa, bərpa linki göndərildi. Link 1 saat etibarlıdır.', newPassword: 'Yeni parol təyin edin', repeatPassword: 'Parolu təkrarlayın', mismatch: 'Parollar üst-üstə düşmür', showPassword: 'Parolu göstər / gizlət',
     security: 'Təhlükəsizlik', mfa: 'İkifaktorlu autentifikasiya', mfaCode: 'Təsdiq kodu', mfaSetup: '2FA qur', mfaEnable: 'Aktiv et', mfaDisable: 'Deaktiv et', mfaHelp: 'Bu açarı autentifikator tətbiqinə əlavə edin, sonra 6 rəqəmli kodu daxil edin.', integrations: 'İnteqrasiyalar', content: 'Məzmun', p_about: 'Haqqımızda', p_terms: 'Şərtlər', p_privacy: 'Məxfilik',
     home: 'Ana səhifə', stays: 'Otellər', trips: 'Səyahətlərim', login: 'Daxil ol', register: 'Qeydiyyat', logout: 'Çıxış', admin: 'Admin', cabinet: 'Otel kabineti', agencyDesk: 'Agentlik kabineti',
     heroTitle: 'Növbəti qalacağınız yeri tapın', heroSub: 'Azərbaycan və Özbəkistan otelləri — ən yaxşı qiymətlər, ani təsdiq.',
@@ -50,6 +52,7 @@ const I18N = {
     notifications: 'Bildirişlər', grossUsd: 'Ümumi satış (USD)', hotelPayable: 'Otellərə ödəniləcək', revenue: 'Platforma gəliri', funnel: 'Konversiya', searches: 'Axtarışlar', views: 'Otel baxışları', checkouts: 'Bron başlanğıcı',
   },
   ru: {
+    forgot: 'Забыли пароль?', forgotHelp: 'Введите e-mail аккаунта, и мы отправим ссылку для сброса.', sendLink: 'Отправить ссылку', resetSent: 'Если аккаунт с таким e-mail существует, ссылка отправлена. Она действует 1 час.', newPassword: 'Новый пароль', repeatPassword: 'Повторите пароль', mismatch: 'Пароли не совпадают', showPassword: 'Показать / скрыть пароль',
     security: 'Безопасность', mfa: 'Двухфакторная аутентификация', mfaCode: 'Код подтверждения', mfaSetup: 'Настроить 2FA', mfaEnable: 'Включить', mfaDisable: 'Отключить', mfaHelp: 'Добавьте ключ в приложение-аутентификатор и введите 6-значный код.', integrations: 'Интеграции', content: 'Контент', p_about: 'О нас', p_terms: 'Условия', p_privacy: 'Конфиденциальность',
     home: 'Главная', stays: 'Отели', trips: 'Мои поездки', login: 'Войти', register: 'Регистрация', logout: 'Выйти', admin: 'Админ', cabinet: 'Кабинет отеля', agencyDesk: 'Кабинет агентства',
     heroTitle: 'Найдите место для следующей поездки', heroSub: 'Отели Азербайджана и Узбекистана — лучшие цены, мгновенное подтверждение.',
@@ -75,6 +78,7 @@ const I18N = {
     notifications: 'Уведомления', grossUsd: 'Продажи (USD)', hotelPayable: 'К выплате отелям', revenue: 'Доход платформы', funnel: 'Воронка', searches: 'Поиски', views: 'Просмотры отелей', checkouts: 'Начало брони',
   },
   uz: {
+    forgot: 'Parolni unutdingizmi?', forgotHelp: "Hisob e-pochtasini kiriting, tiklash havolasini yuboramiz.", sendLink: 'Havola yuborish', resetSent: "Bu e-pochta bilan hisob mavjud bo'lsa, havola yuborildi. U 1 soat amal qiladi.", newPassword: 'Yangi parol', repeatPassword: 'Parolni takrorlang', mismatch: 'Parollar mos kelmadi', showPassword: "Parolni ko'rsatish / yashirish",
     security: 'Xavfsizlik', mfa: 'Ikki bosqichli autentifikatsiya', mfaCode: 'Tasdiqlash kodi', mfaSetup: '2FA sozlash', mfaEnable: 'Yoqish', mfaDisable: "O'chirish", mfaHelp: "Kalitni autentifikator ilovasiga qo'shing va 6 xonali kodni kiriting.", integrations: 'Integratsiyalar', content: 'Kontent', p_about: 'Biz haqimizda', p_terms: 'Shartlar', p_privacy: 'Maxfiylik',
     home: 'Bosh sahifa', stays: 'Mehmonxonalar', trips: 'Sayohatlarim', login: 'Kirish', register: "Ro'yxatdan o'tish", logout: 'Chiqish', admin: 'Admin', cabinet: 'Mehmonxona kabineti', agencyDesk: 'Agentlik kabineti',
     heroTitle: 'Keyingi turar joyingizni toping', heroSub: "Ozarbayjon va O'zbekiston mehmonxonalari — eng yaxshi narxlar, tezkor tasdiq.",

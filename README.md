@@ -10,7 +10,7 @@ Requires **Node.js ≥ 22.5** (uses the built-in `node:sqlite`).
 ```bash
 npm install
 npm start          # http://localhost:3000
-npm test           # 27 tests: pricing, roles, double-booking, payments, idempotency, integrations
+npm test           # 29 tests: pricing, roles, double-booking, payments, idempotency, integrations
 ```
 
 The SQLite database (`data/hotel.db`) is created and seeded with demo data on first start. Env: `PORT`, `DB_PATH`, `AUTH_SECRET`.
@@ -41,6 +41,7 @@ The SQLite database (`data/hotel.db`) is created and seeded with demo data on fi
 | Payments | Demo gateway by default; **Stripe Checkout** via `PAYMENT_PROVIDER=stripe` with signed, de-duplicated webhook (`/api/webhooks/stripe`) |
 | Supplier / PMS / Channel Manager | Adapter interface + built-in mock supplier + generic REST adapter (`docs/SUPPLIER_API.md`); sync, duplicate matching, supplier-confirmed bookings, supplier cancellation |
 | Telegram, CRM webhook, Google Sheets, e-mail (SMTP) | Transactional outbox with retry/backoff, dedupe, error log, manual retry (Admin → Integrations); no guest PII to Telegram/Sheets |
+| Password reset | Forgot-password by e-mail: random single-use token (only its hash stored, 1 h), same response for unknown e-mails, old sessions invalidated after reset. Without SMTP the link is printed to the server console |
 | MFA | TOTP (RFC 6238) for any account; `REQUIRE_ADMIN_MFA=1` enforces it for the admin panel |
 | Exchange rates | Editable by admin with history; stored in each booking snapshot |
 | SEO / CMS | Crawlable `/h/:id` pages with JSON-LD + Open Graph, `sitemap.xml`, `robots.txt`, editable CMS pages |
