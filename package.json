@@ -1,0 +1,21 @@
+{
+  "name": "hotel-booking-platform",
+  "version": "1.0.0",
+  "description": "B2C + B2B hotel booking platform",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test "tests/*.test.js"",
+    "dev": "node --watch server/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=22.5"
+  }
+}
