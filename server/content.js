@@ -17,9 +17,6 @@ const PAGES = {
 2. **Compare** — filter by stars, meal plan, facilities and price.
 3. **Book in minutes** — confirm instantly and get your reservation reference.
 
-## For travel agencies
-Open an agency account to unlock **agency rates**, **contract settlement** with a credit limit, and a dedicated booking desk for your clients.
-
 ## For hotels
 List your property, manage rooms, prices and availability yourself, and reach travellers and agencies in one place. You decide how guests pay: online, at the hotel, or both.
 
@@ -38,9 +35,6 @@ Start with a search — your perfect stay is a few clicks away.`],
 1. **Найдите** — выберите направление, даты и количество гостей.
 2. **Сравните** — фильтры по звёздам, питанию, удобствам и цене.
 3. **Забронируйте за минуты** — мгновенное подтверждение и номер брони.
-
-## Для турагентств
-Откройте агентский аккаунт и получите **агентские цены**, **оплату по договору** с кредитным лимитом и личный кабинет для работы с клиентами.
 
 ## Для отелей
 Разместите объект, самостоятельно управляйте номерами, ценами и наличием и привлекайте путешественников и агентства в одном месте. Вы сами решаете, как платят гости: онлайн, в отеле или любым способом.
@@ -61,9 +55,6 @@ Start with a search — your perfect stay is a few clicks away.`],
 2. **Müqayisə edin** — ulduz, yemək növü, imkanlar və qiymətə görə filtrləyin.
 3. **Dəqiqələr içində bron edin** — ani təsdiq alın və bron nömrənizi əldə edin.
 
-## Turizm agentlikləri üçün
-Agentlik hesabı açın: **agentlik qiymətləri**, kredit limiti ilə **müqavilə üzrə hesablaşma** və müştəriləriniz üçün ayrıca bron kabineti sizə açılır.
-
 ## Otellər üçün
 Obyektinizi yerləşdirin, otaq, qiymət və boş yerləri özünüz idarə edin, turist və agentliklərlə bir platformada işləyin. Qonağın necə ödəyəcəyini siz seçirsiniz: onlayn, otelin özündə və ya hər ikisi.
 
@@ -82,9 +73,6 @@ Axtarışla başlayın — mükəmməl otel bir neçə kliklə yanınızdadır.`
 1. **Qidiring** — yo'nalish, sana va mehmonlar sonini tanlang.
 2. **Solishtiring** — yulduz, ovqatlanish, qulayliklar va narx bo'yicha saralang.
 3. **Daqiqalarda bron qiling** — tezkor tasdiq va bron raqamini oling.
-
-## Turistik agentliklar uchun
-Agentlik hisobini oching: **agentlik narxlari**, kredit limiti bilan **shartnoma bo'yicha hisob-kitob** va mijozlaringiz uchun alohida bron kabineti ochiladi.
 
 ## Mehmonxonalar uchun
 Obyektingizni joylashtiring, xona, narx va bo'sh joylarni o'zingiz boshqaring, sayyohlar va agentliklarga bir joyda chiqing. Mehmon qanday to'lashini o'zingiz tanlaysiz: onlayn, mehmonxonada yoki ikkalasi.

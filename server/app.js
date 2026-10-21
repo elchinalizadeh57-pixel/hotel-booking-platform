@@ -817,6 +817,11 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
       else if (CONTENT.OLD_PLACEHOLDERS.some((p) => cur.body.startsWith(p))) run('UPDATE cms_pages SET title=?, body=? WHERE slug=? AND lang=?', title, body, slug, lang); // only replaces untouched placeholders
     }
   }
+  // one-time cleanup: the "for travel agencies" pitch was removed from the About page
+  for (const row of all("SELECT lang, body FROM cms_pages WHERE slug='about'")) {
+    const cleaned = row.body.replace(/\n## (For travel agencies|Для турагентств|Turizm agentlikləri üçün|Turistik agentliklar uchun)\n[\s\S]*?(?=\n## |$)/, '');
+    if (cleaned !== row.body) run("UPDATE cms_pages SET body=? WHERE slug='about' AND lang=?", cleaned, row.lang);
+  }
   suppliers.syncAll().catch((e) => console.error('sync', e.message));
   return { app, db, outbox, suppliers, close: () => { timers.forEach(clearInterval); db.close(); } };
 }
