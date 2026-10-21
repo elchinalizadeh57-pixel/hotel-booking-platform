@@ -137,6 +137,8 @@ function createApp({ dbFile = process.env.DB_PATH || path.join(__dirname, '..', 
   const wrap = (fn) => (req, res, next) => { try { Promise.resolve(fn(req, res)).catch(next); } catch (e) { next(e); } };
   const app = express();
   app.disable('x-powered-by');
+  app.set('trust proxy', 1); // behind Railway/any reverse proxy: real client IP for rate limits, https for links
+  app.get('/healthz', (req, res) => res.json({ ok: true }));
   // Payment provider webhook: needs the raw body for signature verification, so it is mounted before express.json.
   app.post('/api/webhooks/stripe', express.raw({ type: '*/*', limit: '200kb' }), wrap(async (req, res) => {
     const raw = req.body.toString('utf8');

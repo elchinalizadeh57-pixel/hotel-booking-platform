@@ -24,7 +24,10 @@ const HOTELS = [
 ];
 const ROOMS = [['Standard Double', 2, '1 double bed', 22, 1], ['Deluxe Room', 3, '1 king bed', 30, 1.45], ['Family Suite', 4, '2 queen beds', 48, 2.1]];
 
+// Demo accounts (known passwords) are created only outside production, or when SEED_DEMO_USERS=1.
+// In production the single admin gets ADMIN_EMAIL / ADMIN_PASSWORD from the environment.
 function seed(db) {
+  const demo = process.env.SEED_DEMO_USERS === '1' || process.env.NODE_ENV !== 'production';
   const insU = db.prepare('INSERT INTO users(email,name,pass,role,agency_id,hotel_id) VALUES(?,?,?,?,?,?)');
   const insH = db.prepare(`INSERT INTO hotels(name,country,city,address,lat,lng,stars,description,amenities,meal,price_model,rating,images,
     website,instagram) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
@@ -36,13 +39,22 @@ function seed(db) {
     ROOMS.forEach((r, j) => insR.run(id, r[0], r[1], r[2], r[3], JSON.stringify(['wifi', 'tv', 'ac']), IMG[['room1', 'bed', 'suite'][j]], Math.round(base * r[4]), 4 + j));
   });
   db.exec("UPDATE hotels SET payment_policy='online' WHERE id=3; UPDATE hotels SET payment_policy='property' WHERE id=5");
-  const ag = Number(db.prepare("INSERT INTO agencies(name,voen,country,contact,status,credit_limit) VALUES('Silk Tours LLC','1234567890','Azerbaijan','+994 50 000 00 00','approved',5000)").run().lastInsertRowid);
-  const ag2 = Number(db.prepare("INSERT INTO agencies(name,voen,country,contact,status) VALUES('New Horizons Travel','9876543210','Uzbekistan','+998 90 000 00 00','pending')").run().lastInsertRowid);
-  insU.run('admin@hotel.local', 'Platform Admin', hashPassword('Admin123!'), 'admin', null, null);
-  insU.run('tourist@hotel.local', 'Demo Tourist', hashPassword('Tourist123!'), 'tourist', null, null);
-  insU.run('agency@hotel.local', 'Silk Tours Manager', hashPassword('Agency123!'), 'agency', ag, null);
-  insU.run('agency2@hotel.local', 'New Horizons Manager', hashPassword('Agency123!'), 'agency', ag2, null);
-  insU.run('hotel@hotel.local', 'Caspian Pearl Manager', hashPassword('Hotel123!'), 'hotel', null, 1);
+  if (demo) {
+    const ag = Number(db.prepare("INSERT INTO agencies(name,voen,country,contact,status,credit_limit) VALUES('Silk Tours LLC','1234567890','Azerbaijan','+994 50 000 00 00','approved',5000)").run().lastInsertRowid);
+    const ag2 = Number(db.prepare("INSERT INTO agencies(name,voen,country,contact,status) VALUES('New Horizons Travel','9876543210','Uzbekistan','+998 90 000 00 00','pending')").run().lastInsertRowid);
+    insU.run('admin@hotel.local', 'Platform Admin', hashPassword('Admin123!'), 'admin', null, null);
+    insU.run('tourist@hotel.local', 'Demo Tourist', hashPassword('Tourist123!'), 'tourist', null, null);
+    insU.run('agency@hotel.local', 'Silk Tours Manager', hashPassword('Agency123!'), 'agency', ag, null);
+    insU.run('agency2@hotel.local', 'New Horizons Manager', hashPassword('Agency123!'), 'agency', ag2, null);
+    insU.run('hotel@hotel.local', 'Caspian Pearl Manager', hashPassword('Hotel123!'), 'hotel', null, 1);
+  } else {
+    const email = (process.env.ADMIN_EMAIL || '').toLowerCase();
+    let pass = process.env.ADMIN_PASSWORD;
+    if (!email) throw new Error('ADMIN_EMAIL must be set in production');
+    if (!pass) { pass = require('crypto').randomBytes(12).toString('base64url'); console.log('[seed] generated admin password for ' + email + ': ' + pass); }
+    if (pass.length < 10) throw new Error('ADMIN_PASSWORD must be at least 10 characters');
+    insU.run(email, 'Administrator', hashPassword(pass), 'admin', null, null);
+  }
   const rule = db.prepare('INSERT INTO pricing_rules(kind,scope,scope_ref,percent) VALUES(?,?,?,?)');
   rule.run('markup', 'platform', null, 20);
   rule.run('markup', 'country', 'Uzbekistan', 25);
